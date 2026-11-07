@@ -1149,8 +1149,7 @@
   "importOutcome": "new",
   "duplicateOfPostingDateTime": null,
   "autoFlags": [
-   "OTHER_SESSION_COURSE",
-   "NO_FIRST_CHOICE"
+   "NO_COURSE_CHOSEN"
   ],
   "claimsFlemish": false,
   "expectedFeeIfFlemishConfirmed": 250,
@@ -1273,9 +1272,7 @@
   "expectedId": "SOS26-0082",
   "importOutcome": "new",
   "duplicateOfPostingDateTime": null,
-  "autoFlags": [
-   "OTHER_SESSION_COURSE"
-  ],
+  "autoFlags": [],
   "claimsFlemish": true,
   "expectedFeeIfFlemishConfirmed": 200,
   "case": "E07",
@@ -1380,10 +1377,7 @@
   "expectedId": "SOS26-0089",
   "importOutcome": "new",
   "duplicateOfPostingDateTime": null,
-  "autoFlags": [
-   "NO_FIRST_CHOICE",
-   "CHOICE_GAP"
-  ],
+  "autoFlags": [],
   "claimsFlemish": false,
   "expectedFeeIfFlemishConfirmed": 430,
   "case": "E08",
@@ -1488,9 +1482,7 @@
   "expectedId": "SOS26-0096",
   "importOutcome": "new",
   "duplicateOfPostingDateTime": null,
-  "autoFlags": [
-   "DUPLICATE_CHOICE"
-  ],
+  "autoFlags": [],
   "claimsFlemish": true,
   "expectedFeeIfFlemishConfirmed": 280,
   "case": "E09",
@@ -1599,9 +1591,7 @@
   "expectedId": "SOS26-0103",
   "importOutcome": "new",
   "duplicateOfPostingDateTime": null,
-  "autoFlags": [
-   "CHOICE_GAP"
-  ],
+  "autoFlags": [],
   "claimsFlemish": false,
   "expectedFeeIfFlemishConfirmed": 430,
   "case": "E10",

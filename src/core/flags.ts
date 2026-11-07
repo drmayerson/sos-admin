@@ -24,9 +24,10 @@ export function sessionKeyOf(label: string, cfg: SeasonConfig): string | null {
 export function derivedChoices(row: Row, cfg: SeasonConfig): { session: string; choices: [string, string, string] } {
   const s = sessionKeyOf(field(row, cfg, 'session'), cfg);
   const cf = s ? choiceFields(cfg)[s] : undefined;
-  const choices = (cf ? cf.map((k) => field(row, cfg, k)) : ['', '', '']).map((v) => (isNoChoice(v) ? '' : v.trim())) as [
-    string, string, string,
-  ];
+  // Preference list without gaps and repeats: ["", "X", "X"] → ["X", "", ""].
+  const raw = (cf ? cf.map((k) => field(row, cfg, k)) : []).filter((v) => !isNoChoice(v)).map((v) => v.trim());
+  const list = [...new Set(raw)];
+  const choices: [string, string, string] = [list[0] ?? '', list[1] ?? '', list[2] ?? ''];
   return { session: s ?? '', choices };
 }
 
@@ -45,29 +46,22 @@ export function computeAutoFlags(row: Row, cfg: SeasonConfig): NewFlag[] {
   if (!session) {
     add('UNKNOWN_SESSION', `Session answer "${sessionLabel}" matches no configured session.`);
   } else {
-    // Other session's columns should be empty / "(Not applying…)".
-    const other: string[] = [];
-    for (const [key, fields] of Object.entries(cf)) {
-      if (key === s) continue;
-      for (const f of fields) {
-        const v = field(row, cfg, f);
-        if (!isNoChoice(v)) other.push(v.trim());
-      }
-    }
-    if (other.length) add('OTHER_SESSION_COURSE', `Chose ${session.label} but also listed ${other.join(', ')} from another session.`);
-
+    // Gaps, repeated courses and extra courses from the other session are harmless (decided 7 Nov 2026):
+    // only flag when the chosen session has no course at all, typically "wrong session selected".
     const own = cf[session.key].map((f) => field(row, cfg, f));
-    if (isNoChoice(own[0])) add('NO_FIRST_CHOICE', 'No first choice in the chosen session.');
     const real = own.filter((v) => !isNoChoice(v)).map((v) => v.trim());
-    const dup = real.filter((v, i) => real.indexOf(v) !== i);
-    if (dup.length) add('DUPLICATE_CHOICE', `Course chosen more than once: ${[...new Set(dup)].join(', ')}.`);
-    let seenEmpty = false;
-    for (const v of own) {
-      if (isNoChoice(v)) seenEmpty = true;
-      else if (seenEmpty) {
-        add('CHOICE_GAP', 'A later choice is filled in while an earlier one is empty.');
-        break;
+    if (real.length === 0) {
+      const other: string[] = [];
+      for (const [key, fields] of Object.entries(cf)) {
+        if (key === s) continue;
+        for (const f of fields) if (!isNoChoice(field(row, cfg, f))) other.push(field(row, cfg, f).trim());
       }
+      add(
+        'NO_COURSE_CHOSEN',
+        other.length
+          ? `No course chosen in ${session.label}, but chose ${other.join(', ')} from the other session — wrong session selected?`
+          : `No course chosen in ${session.label}.`,
+      );
     }
     const known = new Set(cfg.courses.filter((c) => c.session === session.key).map((c) => c.code));
     const otherKnown = new Set(cfg.courses.filter((c) => c.session !== session.key).map((c) => c.code));

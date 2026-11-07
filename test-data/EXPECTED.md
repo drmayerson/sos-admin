@@ -18,10 +18,10 @@
 
 - Applications: 212 rows → 210 after removing 2 exact duplicates; 2 near-duplicates to review.
 - Claiming Flemish status: 123.
-- Automatic flags: CHOICE_GAP 2, DUPLICATE_CHOICE 1, NO_FIRST_CHOICE 2, OTHER_SESSION_COURSE 2, SHORT_MOTIVATION 2, TOO_OLD 1, YOUNG 24.
+- Automatic flags: NO_COURSE_CHOSEN 1, SHORT_MOTIVATION 2, TOO_OLD 1, YOUNG 24.
 - IDs are assigned in true posting order (GMT offset taken into account), skipping exact duplicates.
 
-Flag names used in the oracle: `OTHER_SESSION_COURSE`, `NO_FIRST_CHOICE`, `DUPLICATE_CHOICE`, `CHOICE_GAP`, `YOUNG`, `TOO_OLD`, `SHORT_MOTIVATION`. Base-population rows can also carry flags (e.g. random `>2` students) — `expected_applications.json` is authoritative.
+Flag names used in the oracle: `NO_COURSE_CHOSEN`, `YOUNG`, `TOO_OLD`, `SHORT_MOTIVATION`. Base-population rows can also carry flags (e.g. random `>2` students) — `expected_applications.json` is authoritative.
 
 ## Deliberate edge cases — applications
 
@@ -31,11 +31,11 @@ Flag names used in the oracle: `OTHER_SESSION_COURSE`, `NO_FIRST_CHOICE`, `DUPLI
 | E03 | Kateřina Procházka: resubmits next day with a corrected 2nd choice | Near-duplicate flag. Merge keeps the corrected choices AND the earliest timestamp. |
 | E04 | Jolien Van den Broeck: resubmits 3 days later with a different e-mail and phone | Near-duplicate via name + birth date (e-mail differs). |
 | E05 | Inès Girard: applies to BOTH sessions (two forms, 12 min apart) | NOT a duplicate. Two applications, two IDs, linked as the same person. Will pay twice. |
-| E06 | Freja Jensen: Session I selected, but only Session II courses chosen | Flags OTHER_SESSION_COURSE + NO_FIRST_CHOICE. |
-| E07 | Ellen Segers: Session II selected, but also a Session I course | Flag OTHER_SESSION_COURSE (student should submit a second form if they want both). |
-| E08 | Arjun Raghunathan: only a 2nd choice, 1st empty | Flags NO_FIRST_CHOICE + CHOICE_GAP. |
-| E09 | Febe De Wilde: same course as 1st and 2nd choice | Flag DUPLICATE_CHOICE. |
-| E10 | Mehmet Çelik: 1st and 3rd choice, no 2nd | Flag CHOICE_GAP. |
+| E06 | Freja Jensen: Session I selected, but only Session II courses chosen | Flag NO_COURSE_CHOSEN (detail mentions the Session II courses: wrong session selected?). |
+| E07 | Ellen Segers: Session II selected, but also a Session I course | No flag (extra other-session courses are harmless; the student should submit a second form if they want both). |
+| E08 | Arjun Raghunathan: only a 2nd choice, 1st empty | No flag; preference list becomes EXPTECH / — / —. |
+| E09 | Febe De Wilde: same course as 1st and 2nd choice | No flag; preference list becomes MAGNETISM / QUANTUM / —. |
+| E10 | Mehmet Çelik: 1st and 3rd choice, no 2nd | No flag; preference list becomes AVATAR / ATOMIC / —. |
 | E11 | Wei Zhang: other session's columns all '(Not applying to Session II)' | Valid — no flag. |
 | E12 | Lowie Van de Velde: years left '>2' (age 15) | Flag YOUNG (via years left). |
 | E13 | Haruto Suzuki: age 14 at Session I start, says 2 years left | Flag YOUNG (via age). |

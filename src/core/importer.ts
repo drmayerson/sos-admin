@@ -109,6 +109,9 @@ export function newAppRow(values: Row, cfg: SeasonConfig, id: string, importKey:
     [APP_COLS.emailSentStudent]: '',
     [APP_COLS.dormOK]: '',
     [APP_COLS.okForCourses]: '',
+    [APP_COLS.notOkForCourses]: '',
+    [APP_COLS.assignedCourse]: '',
+    [APP_COLS.youngApprovedWith]: '',
     [APP_COLS.notes]: '',
     [APP_COLS.withdrawnReason]: '',
   });
@@ -171,6 +174,14 @@ export function planImport({ csv, cfg, existingApps, existingRaw, importedAt }: 
     seenKeys.add(key); // identical rows within one file count once
     cands.push({ rowNo: r.rowNo, values: r.values, key, utc });
   }
+  // Unreadable timestamps block the whole import: importing the other rows now and these later
+  // would give them out-of-order IDs.
+  if (plan.skipped.length) {
+    plan.errors.push(
+      `${plan.skipped.length} row(s) have an unreadable Posting Date/Time, e.g. "${plan.skipped[0].reason.replace(/^.*?"/, '').replace(/"$/, '')}". Nothing was imported; please report this format.`,
+    );
+    return plan;
+  }
   cands.sort((a, b) => (a.utc < b.utc ? -1 : a.utc > b.utc ? 1 : a.rowNo - b.rowNo));
 
   // 4. Lookup tables from what is already stored.
@@ -207,9 +218,11 @@ export function planImport({ csv, cfg, existingApps, existingRaw, importedAt }: 
     plan.rawRows.push({ ...c.values, ...meta, AppID: id });
 
     // Near-duplicate: same person AND same session (different sessions = two legitimate applications).
-    const near = samePerson.find(
-      (p) => p[APP_COLS.status] !== 'merged' && p[APP_COLS.session] === app[APP_COLS.session],
-    );
+    // With 3+ submissions, every later one points at the EARLIEST application of the group, so the
+    // group can be reviewed and merged together.
+    const near = samePerson
+      .filter((p) => p[APP_COLS.status] !== 'merged' && p[APP_COLS.session] === app[APP_COLS.session])
+      .sort((a, b) => (a[APP_COLS.postingUTC] < b[APP_COLS.postingUTC] ? -1 : 1))[0];
     if (near) {
       const how = myKeys.find((k) => k.startsWith('e:') && personMatchKeys(near, cfg).includes(k)) ? 'same e-mail' : 'same name + birth date';
       const differs = differingFields(near, app, cfg).map((k) => LABELS[k] ?? cfg.columnMap[k]);

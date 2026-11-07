@@ -3,6 +3,7 @@ import type { ParsedCsv } from './csv';
 import { derivedChoices, reconcileAutoFlags } from './flags';
 import { planImport, type ImportPlan } from './importer';
 import type { TableStore } from './store';
+import { courseDecisionColumns, type CourseDecision } from './young';
 import {
   APP_COLS, FIELD_KEYS, FLAG_COLS, type AuditEntry, type FlagStatus, type NewFlag, type Row, type SeasonConfig,
 } from './types';
@@ -149,6 +150,40 @@ export class Repo {
     await this.refreshOpenFlags([f[FLAG_COLS.appId]]);
   }
 
+  /** Save per-course OK / NOT OK decisions for a (young) student. No decision = the assignment algorithm decides. */
+  async setCourseDecisions(id: string, decisions: Record<string, CourseDecision>): Promise<void> {
+    const cfg = await this.requireConfig();
+    await this.updateApplication(id, courseDecisionColumns(decisions, cfg), 'young review');
+  }
+
+  /**
+   * Close the student's YOUNG flag ("OK"). Remembers the assigned course at this moment, so that a later
+   * reassignment to another course can reopen the flag (phase 2).
+   */
+  async closeYoungFlag(id: string, note: string): Promise<void> {
+    const flag = (await this.store.readAll('Flags')).find(
+      (f) => f[FLAG_COLS.appId] === id && f[FLAG_COLS.type] === 'YOUNG' && f[FLAG_COLS.status] === 'open',
+    );
+    if (!flag) throw new Error(`${id} has no open YOUNG flag.`);
+    const app = (await this.store.readAll('Applications')).find((a) => a[APP_COLS.id] === id)!;
+    await this.updateApplication(id, { [APP_COLS.youngApprovedWith]: app[APP_COLS.assignedCourse] ?? '' }, 'young review');
+    await this.setFlagStatus(flag[FLAG_COLS.flagId], 'approved', note || 'OK');
+  }
+
+  /** Add a comment / "action taken" line to a flag (e.g. "e-mailed the course teacher"), without deciding it. */
+  async addFlagComment(flagId: string, text: string): Promise<void> {
+    const t = text.trim();
+    if (!t) return;
+    const f = (await this.store.readAll('Flags')).find((x) => x[FLAG_COLS.flagId] === flagId);
+    if (!f) throw new Error(`No flag ${flagId}`);
+    const line = `${this.clock().slice(0, 10)} ${this.user}: ${t.replace(/\s*\n\s*/g, ' ')}`;
+    const old = f[FLAG_COLS.comments] ?? '';
+    await this.store.update('Flags', FLAG_COLS.flagId, [{ key: flagId, values: { [FLAG_COLS.comments]: old ? `${old}\n${line}` : line } }]);
+    await this.store.append('AuditLog', [
+      this.entry(f[FLAG_COLS.appId], `Flag ${flagId} (${f[FLAG_COLS.type]}) comment`, '', t, 'flag comment'),
+    ] as unknown as Row[]);
+  }
+
   // ---------------------------------------------------------------- near-duplicate merge
 
   /**
@@ -157,17 +192,32 @@ export class Repo {
    * The later application is kept, marked "merged".
    */
   async mergeInto(earlierId: string, laterId: string, takeFromLater: string[]): Promise<void> {
+    await this.mergeGroup(earlierId, [laterId], Object.fromEntries(takeFromLater.map((c) => [c, laterId])));
+  }
+
+  /**
+   * Merge several later submissions (3+ near-duplicates) into the earliest one in one go.
+   * `take` says, per column, which later application's value to use; other columns keep the earliest's value.
+   */
+  async mergeGroup(earlierId: string, laterIds: string[], take: Record<string, string>): Promise<void> {
     const apps = await this.store.readAll('Applications');
     const earlier = apps.find((a) => a[APP_COLS.id] === earlierId);
-    const later = apps.find((a) => a[APP_COLS.id] === laterId);
-    if (!earlier || !later) throw new Error('Application not found');
-    if (later[APP_COLS.postingUTC] < earlier[APP_COLS.postingUTC]) throw new Error('Merge must go into the earliest application.');
+    const later = laterIds.map((id) => apps.find((a) => a[APP_COLS.id] === id));
+    if (!earlier || later.some((l) => !l)) throw new Error('Application not found');
+    if (later.some((l) => l![APP_COLS.postingUTC] < earlier[APP_COLS.postingUTC])) throw new Error('Merge must go into the earliest application.');
     const changes: Row = {};
-    for (const col of takeFromLater) changes[col] = later[col] ?? '';
-    await this.updateApplication(earlierId, changes, `merge from ${laterId}`);
-    await this.updateApplication(laterId, { [APP_COLS.status]: 'merged', [APP_COLS.mergedInto]: earlierId }, `merged into ${earlierId}`);
-    const flags = (await this.store.readAll('Flags')).filter((f) => f[FLAG_COLS.appId] === laterId && f[FLAG_COLS.status] === 'open');
-    for (const f of flags) await this.setFlagStatus(f[FLAG_COLS.flagId], 'resolved', `merged into ${earlierId}`, 'merge');
+    for (const [col, src] of Object.entries(take)) {
+      if (src === earlierId) continue;
+      const s = later.find((l) => l![APP_COLS.id] === src);
+      if (!s) throw new Error(`${src} is not part of this merge`);
+      changes[col] = s[col] ?? '';
+    }
+    await this.updateApplication(earlierId, changes, `merge from ${laterIds.join(', ')}`);
+    for (const laterId of laterIds) {
+      await this.updateApplication(laterId, { [APP_COLS.status]: 'merged', [APP_COLS.mergedInto]: earlierId }, `merged into ${earlierId}`);
+      const flags = (await this.store.readAll('Flags')).filter((f) => f[FLAG_COLS.appId] === laterId && f[FLAG_COLS.status] === 'open');
+      for (const f of flags) await this.setFlagStatus(f[FLAG_COLS.flagId], 'resolved', `merged into ${earlierId}`, 'merge');
+    }
   }
 
   // ---------------------------------------------------------------- internals
@@ -194,6 +244,7 @@ export class Repo {
       [FLAG_COLS.detail]: f.detail,
       [FLAG_COLS.status]: 'open',
       [FLAG_COLS.note]: '',
+      [FLAG_COLS.comments]: '',
       [FLAG_COLS.createdAt]: now,
       [FLAG_COLS.resolvedBy]: '',
       [FLAG_COLS.resolvedAt]: '',

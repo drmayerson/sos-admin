@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { field } from '../../core/flags';
+import { fieldOptions } from '../../core/fieldOptions';
 import { fold } from '../../core/text';
 import { APP_COLS, FLAG_COLS, type FieldKey, type Row } from '../../core/types';
 import { choicesText, fmtTime, fullName, useApp } from '../ctx';
@@ -90,7 +91,22 @@ export function ApplicationDetail({ id }: { id: string }) {
 
   const input = (k: FieldKey) => {
     const col = cfg.columnMap[k];
-    const props = { value: val(col), onInput: (e: Event) => setVal(col, (e.target as HTMLInputElement).value), class: col in draft && draft[col] !== app[col] ? 'dirty' : '' };
+    const cls = col in draft && draft[col] !== app[col] ? 'dirty' : '';
+    if (k === 'posting') return <input value={val(col)} readOnly disabled title="The posting time is never edited (it decides first-come-first-served order)." />;
+    const opts = fieldOptions(k, cfg);
+    if (opts) {
+      // Dropdown only. A value that isn't one of the form's answers is kept visible (marked) so nothing is lost silently.
+      const cur = val(col);
+      const all = opts.includes(cur) ? opts : [cur, ...opts];
+      return (
+        <select class={cls} value={cur} onChange={(e) => setVal(col, (e.target as HTMLSelectElement).value)}>
+          {all.map((o) => (
+            <option value={o}>{o === '' ? '(empty)' : o}{opts.includes(o) ? '' : '  ⚠ not a form answer'}</option>
+          ))}
+        </select>
+      );
+    }
+    const props = { value: val(col), onInput: (e: Event) => setVal(col, (e.target as HTMLInputElement).value), class: cls };
     return LONG.includes(k) ? <textarea rows={k === 'motivation' ? 10 : 2} {...props} /> : <input {...props} />;
   };
 
@@ -119,7 +135,9 @@ export function ApplicationDetail({ id }: { id: string }) {
               {['claimed', 'confirmed', 'rejected', 'n.a.'].map((s) => <option>{s}</option>)}
             </select>
           </label>
-          <label>OK for courses (young students)<input value={val(APP_COLS.okForCourses)} onInput={(e) => setVal(APP_COLS.okForCourses, (e.target as HTMLInputElement).value)} /></label>
+          <label>Course decisions (set on <a href="#/young">Young students</a>)
+            <span class="plain">OK: {app[APP_COLS.okForCourses] || '—'} · NOT OK: {app[APP_COLS.notOkForCourses] || '—'}</span>
+          </label>
           <label class="span2">Notes<textarea rows={2} value={val(APP_COLS.notes)} onInput={(e) => setVal(APP_COLS.notes, (e.target as HTMLTextAreaElement).value)} /></label>
         </div>
       </div>

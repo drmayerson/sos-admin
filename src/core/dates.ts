@@ -4,7 +4,8 @@
  * which sorts correctly as text. Returns null if the format is not recognised.
  */
 export function postingToUTC(s: string): string | null {
-  const m = /^\s*(\d{4})[/-](\d{2})[/-](\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?\s*(?:GMT|UTC)?\s*([+-]\d{1,2})?(?::?(\d{2}))?\s*$/.exec(s);
+  // Real exports don't zero-pad every part (e.g. "10:03:9.874100"), so accept 1–2 digits.
+  const m = /^\s*(\d{4})[/-](\d{1,2})[/-](\d{1,2})[ T](\d{1,2}):(\d{1,2}):(\d{1,2})(?:\.(\d{1,6}))?\s*(?:GMT|UTC)?\s*([+-]\d{1,2})?(?::?(\d{2}))?\s*$/.exec(s);
   if (!m) return null;
   const [, y, mo, d, h, mi, sec, frac = '', offH = '+0', offM = '00'] = m;
   const sign = offH.startsWith('-') ? -1 : 1;

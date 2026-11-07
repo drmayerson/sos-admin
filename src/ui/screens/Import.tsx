@@ -83,9 +83,7 @@ export function Import() {
                 <tr><td><b>New applications</b></td><td><b>{plan.newApps.length}</b></td></tr>
                 <tr><td>Exact duplicates (ignored automatically)</td><td>{plan.exactDuplicates.length}</td></tr>
                 <tr><td>Near-duplicates (to review)</td><td>{plan.nearDuplicates.length}</td></tr>
-                <tr><td>Unreadable rows (not imported)</td><td>{plan.skipped.length}</td></tr>
               </tbody></table>
-              {plan.skipped.length > 0 && <ul>{plan.skipped.map((s) => <li>CSV record {s.rowNo}: {s.reason}</li>)}</ul>}
               {flagCounts.length > 0 && (
                 <p>Flags that will be raised: {flagCounts.map(([t, n]) => <span class="badge">{t} {n}</span>)}</p>
               )}

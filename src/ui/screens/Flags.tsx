@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { APP_COLS, FLAG_COLS, FLAG_TYPES, type FlagStatus, type Row } from '../../core/types';
 import { fmtTime, fullName, useApp } from '../ctx';
+import { FlagComments } from '../FlagComments';
 
 const DEDICATED: Record<string, string> = { YOUNG: '#/young', NEAR_DUPLICATE: '#/merge' };
 
@@ -18,8 +19,9 @@ export function Flags() {
     <div>
       <h1>Flags</h1>
       <p>
-        Flags never reject anyone; they ask for a human decision. <b>Approve</b> = proceed anyway, <b>overrule</b> = the flag
-        is wrong, <b>resolve</b> = the issue was fixed (e.g. data corrected). Decided flags stay as history.
+        Flags never reject anyone; they ask for a human decision. Log what you do in the <b>comments</b> (e.g. "e-mailed
+        the student") and decide when ready: <b>approve</b> = proceed anyway, <b>overrule</b> = the flag is wrong,
+        <b> resolve</b> = the issue was fixed (e.g. data corrected). Decided flags stay as history.
       </p>
       <p>{counts.map(([t, n]) => <button class="badge" onClick={() => setType(t)}>{t} {n}</button>)}</p>
       <div class="row">
@@ -34,7 +36,7 @@ export function Flags() {
         <span class="muted">{rows.length} flag(s)</span>
       </div>
       <table><tbody>
-        <tr><th>App</th><th>Name</th><th>Type</th><th>Detail</th><th>Status</th><th>Decision</th></tr>
+        <tr><th>App</th><th>Name</th><th>Type</th><th>Detail</th><th>Comments / actions taken</th><th>Decision</th></tr>
         {rows.map((f) => <FlagRow key={f[FLAG_COLS.flagId]} f={f} />)}
       </tbody></table>
     </div>
@@ -54,16 +56,19 @@ function FlagRow({ f }: { f: Row }) {
       <td>{app ? fullName(app, snap.cfg!) : ''}{app && app[APP_COLS.status] !== 'active' && <span class="badge">{app[APP_COLS.status]}</span>}</td>
       <td>{f[FLAG_COLS.type]}</td>
       <td>{f[FLAG_COLS.detail]}</td>
+      <td class="w-comments"><FlagComments flag={f} /></td>
       <td>
-        {f[FLAG_COLS.status]}
-        {!open && <div class="muted small">{f[FLAG_COLS.resolvedBy]} {fmtTime(f[FLAG_COLS.resolvedAt])}</div>}
-      </td>
-      <td>
+        {!open && (
+          <div>
+            <b>{f[FLAG_COLS.status]}</b>{f[FLAG_COLS.note] && `: ${f[FLAG_COLS.note]}`}
+            <div class="muted small">{f[FLAG_COLS.resolvedBy]} {fmtTime(f[FLAG_COLS.resolvedAt])}</div>
+          </div>
+        )}
         {open && dedicated ? (
-          <a href={dedicated}>Review on its own screen →</a>
+          <a href={dedicated}>Decide on its own screen →</a>
         ) : (
           <div class="row">
-            <input placeholder="Note" value={note} onInput={(e) => setNote((e.target as HTMLInputElement).value)} />
+            {open && <input placeholder="Decision note" value={note} onInput={(e) => setNote((e.target as HTMLInputElement).value)} />}
             {open ? (
               <>
                 <button onClick={() => set('approved')}>Approve</button>

@@ -76,6 +76,36 @@ describe('Repo', () => {
     expect(mergeLog.map((x) => x.Field).sort()).toEqual([c.columnMap.remarks, c.columnMap.s2c2, APP_COLS.choice2].sort());
   });
 
+  it('3+ submissions: all later ones point at the earliest and merge together', async () => {
+    const c = cfg();
+    const csv = syntheticCsv();
+    const e03later = expected().find((e) => e.case === 'E03' && e.importOutcome === 'near_duplicate')!;
+    const src = csv.rows.find((r) => r.values[c.columnMap.posting] === e03later.postingDateTime)!;
+    // A third submission, two days after the second, changing the 3rd choice.
+    const third = {
+      rowNo: 999,
+      values: { ...src.values, [c.columnMap.posting]: '2026/10/01 10:00:0.000001 GMT+2', [c.columnMap.s2c3]: 'PROTEINS' },
+    };
+    const repo = new Repo(new MemoryTableStore('test'), 'tester', () => '2026-11-07T10:00:00.000Z');
+    await repo.saveConfig(c);
+    const plan = await repo.previewImport({ ...csv, rows: [...csv.rows, third] });
+    const first = idOf('E03');
+    const nd = plan.nearDuplicates.filter((n) => n.ofId === first);
+    expect(nd).toHaveLength(2); // second AND third both point at the first
+    await repo.commitImport(plan);
+    const [second, thirdId] = nd.map((n) => n.appId);
+    await repo.mergeGroup(first, [second, thirdId], { [c.columnMap.s2c2]: second, [c.columnMap.s2c3]: thirdId });
+    const s = await repo.snapshot();
+    const a = s.apps.find((x) => x[APP_COLS.id] === first)!;
+    expect([a[APP_COLS.choice1], a[APP_COLS.choice2], a[APP_COLS.choice3]]).toEqual(['BLACKHOLES', 'CELLNANO', 'PROTEINS']);
+    for (const id of [second, thirdId]) {
+      const b = s.apps.find((x) => x[APP_COLS.id] === id)!;
+      expect(b[APP_COLS.status]).toBe('merged');
+      expect(b[APP_COLS.mergedInto]).toBe(first);
+    }
+    expect(s.flags.filter((f) => [second, thirdId].includes(f[FLAG_COLS.appId]) && f[FLAG_COLS.status] === 'open')).toHaveLength(0);
+  });
+
   it('refuses edits to app-managed columns', async () => {
     const repo = await importedRepo();
     await expect(repo.updateApplication(idOf('E12'), { [APP_COLS.choice1]: 'X' })).rejects.toThrow(/managed/);

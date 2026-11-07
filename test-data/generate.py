@@ -396,21 +396,10 @@ def auto_flags(r: dict[str, str], cfg) -> list[str]:
     flags = []
     s = r[H("Which Session")]
     own = [r[c] for c in SESSION_COLS[s]]
-    oth = [r[c] for c in SESSION_COLS[OTHER[s]]]
-    if any(not none_choice(v) for v in oth):
-        flags.append("OTHER_SESSION_COURSE")
-    if none_choice(own[0]):
-        flags.append("NO_FIRST_CHOICE")
-    real = [v for v in own if not none_choice(v)]
-    if len(set(real)) < len(real):
-        flags.append("DUPLICATE_CHOICE")
-    seen_empty = False
-    for v in own:
-        if none_choice(v):
-            seen_empty = True
-        elif seen_empty:
-            flags.append("CHOICE_GAP")
-            break
+    # Gaps, repeated courses and extra other-session courses are harmless (Daniel, 7 Nov 2026):
+    # only flag when the chosen session has no course at all.
+    if all(none_choice(v) for v in own):
+        flags.append("NO_COURSE_CHOSEN")
     b = date.fromisoformat(r[H("Student birth date")])
     age = age_on(b, START[s])
     if r[H("In July 2026")] == ">2" or age <= cfg["thresholds"]["youngMaxAge"]:
@@ -541,25 +530,25 @@ def main():
                 r[SESSION_COLS[S2][i2]] = c
             add(r, "E06", "Chose Session I but filled in Session II courses only.")
             case("E06", f"{p['first']} {p['last']}: Session I selected, but only Session II courses chosen",
-                 "Flags OTHER_SESSION_COURSE + NO_FIRST_CHOICE.")
+                 "Flag NO_COURSE_CHOSEN (detail mentions the Session II courses: wrong session selected?).")
         elif e == "E07":
             r = build(p, S2, ts, choices=["PROTEINS", "CELLNANO"], other_cols="none")
             r[SESSION_COLS[S1][0]] = "QUANTUM"
             add(r, "E07", "Session II with courses in both sessions (wants both in one form).")
             case("E07", f"{p['first']} {p['last']}: Session II selected, but also a Session I course",
-                 "Flag OTHER_SESSION_COURSE (student should submit a second form if they want both).")
+                 "No flag (extra other-session courses are harmless; the student should submit a second form if they want both).")
         elif e == "E08":
             r = build(p, S2, ts, choices=["", "EXPTECH"])
             add(r, "E08", "Only a 2nd choice.")
-            case("E08", f"{p['first']} {p['last']}: only a 2nd choice, 1st empty", "Flags NO_FIRST_CHOICE + CHOICE_GAP.")
+            case("E08", f"{p['first']} {p['last']}: only a 2nd choice, 1st empty", "No flag; preference list becomes EXPTECH / — / —.")
         elif e == "E09":
             r = build(p, S1, ts, choices=["MAGNETISM", "MAGNETISM", "QUANTUM"])
             add(r, "E09", "Same course twice.")
-            case("E09", f"{p['first']} {p['last']}: same course as 1st and 2nd choice", "Flag DUPLICATE_CHOICE.")
+            case("E09", f"{p['first']} {p['last']}: same course as 1st and 2nd choice", "No flag; preference list becomes MAGNETISM / QUANTUM / —.")
         elif e == "E10":
             r = build(p, S2, ts, choices=["AVATAR", "", "ATOMIC"])
             add(r, "E10", "1st and 3rd choice, 2nd empty.")
-            case("E10", f"{p['first']} {p['last']}: 1st and 3rd choice, no 2nd", "Flag CHOICE_GAP.")
+            case("E10", f"{p['first']} {p['last']}: 1st and 3rd choice, no 2nd", "No flag; preference list becomes AVATAR / ATOMIC / —.")
         elif e == "E11":
             r = build(p, S1, ts, choices=["ASTROPLASMA", "NUCLEAR"], other_cols="none")
             for c in SESSION_COLS[S2]:
@@ -849,7 +838,7 @@ def main():
              f"- Claiming Flemish status: {sum(1 for e in expected if e['claimsFlemish'] and e['importOutcome'] != 'exact_duplicate')}.",
              "- Automatic flags: " + ", ".join(f"{k} {v}" for k, v in sorted(fc.items())) + ".",
              "- IDs are assigned in true posting order (GMT offset taken into account), skipping exact duplicates.", "",
-             "Flag names used in the oracle: `OTHER_SESSION_COURSE`, `NO_FIRST_CHOICE`, `DUPLICATE_CHOICE`, `CHOICE_GAP`, "
+             "Flag names used in the oracle: `NO_COURSE_CHOSEN`, "
              "`YOUNG`, `TOO_OLD`, `SHORT_MOTIVATION`. Base-population rows can also carry flags (e.g. random `>2` students) — "
              "`expected_applications.json` is authoritative.", "",
              "## Deliberate edge cases — applications", "", "| Case | Situation | Expected |", "|---|---|---|"]

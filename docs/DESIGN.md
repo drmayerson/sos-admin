@@ -12,10 +12,10 @@ Automate the Summer of Science application workflow (intake → checks → cours
 - Google sign-in (OAuth token flow; Google Cloud project in "testing" mode with Daniel as test user) → the browser reads/writes the master Google Sheet through the Sheets API. Personal data only flows Google ↔ browser.
 - **The Sheet is the ground truth.** Tabs (agreed with Daniel, 7 Nov 2026). All columns are addressed by header name, so later phases simply add columns.
   - `Applications` — one row per application.
-    - App-managed columns: `ID`, `ImportKey`, `PersonKey` (links one student's applications, e.g. both sessions), `PostingUTC` (ISO, GMT offset applied; used for ordering), `Status` (active / merged / withdrawn), `MergedInto`, `WithdrawnReason`, `Session` (S1/S2), `Choice1`–`Choice3` (normalised: "(Not applying…)" → empty), `FLStatus` (claimed / confirmed / rejected / n.a.), `OpenFlags` (read-only convenience summary; the `Flags` tab is the source of truth), young-student helpers `EmailSentCourse`, `CourseOK`, `EmailSentStudent`, `DormOK`, `OKForCourses`, and `Notes`.
+    - App-managed columns: `ID`, `ImportKey`, `PersonKey` (links one student's applications, e.g. both sessions), `PostingUTC` (ISO, GMT offset applied; used for ordering), `Status` (active / merged / withdrawn), `MergedInto`, `WithdrawnReason`, `Session` (S1/S2), `Choice1`–`Choice3` (preference list: "(Not applying…)", gaps and repeats removed, e.g. `— / EXPTECH / —` → `EXPTECH / — / —`), `FLStatus` (claimed / confirmed / rejected / n.a.), `OpenFlags` (read-only convenience summary; the `Flags` tab is the source of truth), young-student notes `EmailSentCourse`, `CourseOK`, `EmailSentStudent`, `DormOK`, per-course decisions `OKForCourses` / `NotOKForCourses`, `AssignedCourse` (filled in phase 2), `YoungApprovedWith` (assigned course when the YOUNG flag was closed), and `Notes`.
     - Form fields: the 41 data columns under their original header text (the 9 decorative columns are dropped).
     - Phase 2 adds assignment, lock, fee, aid and admission columns.
-  - `Flags` — one row per flag: `FlagID`, `AppID`, `Type`, `Detail`, `Status` (open / approved / overruled / resolved), `Note`, `CreatedAt`, `ResolvedBy`, `ResolvedAt`. Resolved flags stay as history.
+  - `Flags` — one row per flag: `FlagID`, `AppID`, `Type`, `Detail`, `Status` (open / approved / overruled / resolved), `Note` (decision note), `Comments` (running log of actions taken, one dated line each), `CreatedAt`, `ResolvedBy`, `ResolvedAt`. Resolved flags stay as history.
   - `RawImports` — every imported CSV row exactly as received (+ `ImportedAt`, `RowNo`, `ImportKey`, `AppID`), never modified.
   - `AuditLog` — every change made through the app (imports, edits, merges, flag decisions): `Timestamp`, `User`, `AppID`, `Field`, `OldValue`, `NewValue`, `Action`.
   - `Config` — key/value rows: fees, thresholds, ID prefix, payment deadline days, column mapping (`map.<field>` → header text).
@@ -27,7 +27,10 @@ Automate the Summer of Science application workflow (intake → checks → cours
 - **Exact duplicate** = all form fields except the timestamp equal after trimming, whitespace collapsing and case-folding. Exact duplicates get no ID and no `Applications` row: they are kept only in `RawImports` (column `DuplicateOf`) and noted in the `AuditLog` of the original.
 - **Flemish claim** in phase 1 only sets `FLStatus = claimed` (no flag), so the Flags list isn't swamped; the school check comes in phase 4.
 - **Automatic flags are re-checked after every edit/merge:** new problems get a flag; open automatic flags that no longer apply are closed as "resolved" (logged); a flag a human approved/overruled is never re-raised.
-- **Merge** keeps the earlier application's ID and timestamp; default choice per differing field is the later (corrected) value.
+- **Merge** keeps the earliest application's ID and timestamp; default choice per differing field is the most recent submission's value.
+- **3+ near-duplicates:** every later submission is flagged against the *earliest* one, so they form one group; the merge screen shows all versions side by side, you pick each differing field from any version, and all later ones are merged in one go (or individually kept separate).
+- **Unreadable Posting Date/Time blocks the whole import** (instead of skipping rows), so IDs can't end up out of posting order. Time parts may be unpadded (`10:03:9.874100`, seen in the real export).
+- **Editing:** fields with fixed answers (session, course choices, gender, T-shirt, years left, accommodation, fallback, "I am a", laptop, photo, checkboxes) are dropdown-only; a stored value that isn't a form answer stays visible, marked. The posting time is read-only.
 - **Medical/dietary fields** are hidden on the application screen until "Show" is clicked.
 - **One Sheet per season.** A "Start new season" wizard creates a fresh Sheet, carries over the column mapping (the form is expected to stay identical apart from course codes, dates and year-specific header text such as "2025-2026" / "July 2026"), asks for courses/capacities/dates/fees, and shows the setup checklist (`REMINDERS.md`). The previous Sheet is archived read-only and viewable from a season switcher. Retention period for archived personal data: to be decided with KU Leuven's data protection officer (DPO).
 - Google account: initially Daniel's own or a KU Leuven-linked account; the app must not hard-code it (moving = copy the Sheet, point the app at it).
@@ -46,7 +49,7 @@ Automate the Summer of Science application workflow (intake → checks → cours
 - The same student applying to **both sessions** submits two applications: these are *not* duplicates. Link them (shared person key) for display.
 
 ### Automatic checks (each produces a flag; nothing is rejected)
-- **Session/course mismatch:** treat empty and "(Not applying to Session X)" as "no choice". Flag if the other session's columns contain a real course code, if there is no 1st choice in the chosen session, if a course is chosen twice, or if there's a gap (3rd without 2nd).
+- **Course choices:** treat empty and "(Not applying to Session X)" as "no choice". Only flag `NO_COURSE_CHOSEN` when the chosen session has no course at all (the detail lists any other-session courses: wrong session selected?). Gaps, repeated courses and extra other-session courses are harmless and not flagged (Daniel, 7 Nov 2026).
 - **Young student:** years left = `>2`, OR age ≤ 14 on the start date of the chosen session.
 - **Too old:** age ≥ 19 on the session start date.
 - **Short motivation:** fewer than ~50 words (threshold configurable).
@@ -54,8 +57,11 @@ Automate the Summer of Science application workflow (intake → checks → cours
 - All thresholds are season settings.
 
 ### Review screens
-- **Young students:** one clear card per student; helper checkboxes "e-mail sent to course", "course OK", "e-mail sent to student", "student dorm OK"; final decision "OK for course …" (one or more, any course in the session, not only their choices). Multiple OKs → the assignment algorithm picks.
-- **Flags:** list of all open flags with "approve anyway / overrule / resolve" and a note; resolved flags stay visible in history.
+- **Young students** (revised 7 Nov 2026): one card per student showing the provisional assignment, motivation and (if non-empty) other remarks.
+  - "Our notes:" checkboxes: e-mail sent to course, course OK, e-mail sent to student, student dorm OK.
+  - Per course in the session: **OK / NOT OK / no decision**, saved explicitly. The assignment algorithm respects OK and NOT OK; with no decision it assigns as usual.
+  - A separate **OK** button closes the YOUNG flag. It warns (but allows) when the assigned course isn't marked OK or, for FULL students, "student dorm OK" isn't ticked. The assigned course at that moment is stored; **if the student is later reassigned to a different course, the flag reopens automatically** (phase 2).
+- **Flags:** list of all open flags with a running **comments / actions taken** log (e.g. "e-mailed the student") and, separately, the decision "approve anyway / overrule / resolve" with a note; resolved flags stay visible in history.
 - **Search & edit** any application; every edit is logged in `AuditLog`.
 
 ## 4. Stage 2 — assignment

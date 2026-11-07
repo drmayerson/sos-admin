@@ -69,6 +69,13 @@ describe('dates and helpers', () => {
     expect(postingToUTC('nonsense')).toBeNull();
   });
 
+  it('accepts unpadded time parts as in the real export ("10:03:9.874100")', () => {
+    expect(postingToUTC('2026/02/15 10:03:9.874100 GMT+1')).toBe('2026-02-15T09:03:09.874100Z');
+    expect(postingToUTC('2026/02/15 9:3:9.874100 GMT+1')).toBe('2026-02-15T08:03:09.874100Z');
+    // Ordering must still be correct across padded/unpadded seconds.
+    expect(postingToUTC('2026/02/15 10:03:9.1 GMT+1')! < postingToUTC('2026/02/15 10:03:10.0 GMT+1')!).toBe(true);
+  });
+
   it('E14/E16: age on a date counts the birthday itself', () => {
     expect(ageOn('2011-07-20', '2026-07-20')).toBe(15);
     expect(ageOn('2011-07-21', '2026-07-20')).toBe(14);
@@ -149,6 +156,22 @@ describe('import plan vs oracle (expected_applications.json)', () => {
     }
     const wei = p.newApps.find((a) => a[APP_COLS.id] === exp.find((e) => e.case === 'E11')!.expectedId)!;
     expect([wei[APP_COLS.choice1], wei[APP_COLS.choice2], wei[APP_COLS.choice3]].every((c) => !c.startsWith('('))).toBe(true);
+  });
+
+  it('E08–E10: gaps and repeats are cleaned into a preference list (no flag)', () => {
+    const choices = (c: string) => {
+      const a = p.newApps.find((x) => x[APP_COLS.id] === exp.find((e) => e.case === c)!.expectedId)!;
+      return [a[APP_COLS.choice1], a[APP_COLS.choice2], a[APP_COLS.choice3]];
+    };
+    expect(choices('E08')).toEqual(['EXPTECH', '', '']);
+    expect(choices('E09')).toEqual(['MAGNETISM', 'QUANTUM', '']);
+    expect(choices('E10')).toEqual(['AVATAR', 'ATOMIC', '']);
+  });
+
+  it('E06: wrong session → NO_COURSE_CHOSEN mentioning the other-session courses', () => {
+    const id = exp.find((e) => e.case === 'E06')!.expectedId;
+    const f = p.flags.find((x) => x.appId === id && x.type === 'NO_COURSE_CHOSEN')!;
+    expect(f.detail).toMatch(/BLACKHOLES, RELATIVITY.*wrong session/);
   });
 
   it('E31: tidies names (trim, collapse spaces) but keeps the original in RawImports', () => {

@@ -74,6 +74,11 @@ export const APP_COLS = {
   emailSentStudent: 'EmailSentStudent',
   dormOK: 'DormOK',
   okForCourses: 'OKForCourses',
+  notOkForCourses: 'NotOKForCourses',
+  /** Provisional/final course assignment (filled by the phase 2 assignment algorithm). */
+  assignedCourse: 'AssignedCourse',
+  /** Assigned course at the moment the YOUNG flag was closed; a different assignment reopens the flag (phase 2). */
+  youngApprovedWith: 'YoungApprovedWith',
   notes: 'Notes',
   withdrawnReason: 'WithdrawnReason',
 } as const;
@@ -82,15 +87,14 @@ export type AppStatus = 'active' | 'merged' | 'withdrawn';
 export type FLStatus = 'claimed' | 'confirmed' | 'rejected' | 'n.a.';
 
 export const FLAG_TYPES = [
-  'OTHER_SESSION_COURSE', 'NO_FIRST_CHOICE', 'DUPLICATE_CHOICE', 'CHOICE_GAP', 'UNKNOWN_COURSE',
-  'UNKNOWN_SESSION', 'BAD_BIRTH_DATE', 'YOUNG', 'TOO_OLD', 'SHORT_MOTIVATION', 'NEAR_DUPLICATE',
+  'NO_COURSE_CHOSEN', 'UNKNOWN_COURSE', 'UNKNOWN_SESSION', 'BAD_BIRTH_DATE', 'YOUNG', 'TOO_OLD', 'SHORT_MOTIVATION',
+  'NEAR_DUPLICATE',
 ] as const;
 export type FlagType = (typeof FLAG_TYPES)[number];
 
 /** Flags computed purely from the form contents (recomputed after edits). */
 export const AUTO_FLAG_TYPES: FlagType[] = [
-  'OTHER_SESSION_COURSE', 'NO_FIRST_CHOICE', 'DUPLICATE_CHOICE', 'CHOICE_GAP', 'UNKNOWN_COURSE',
-  'UNKNOWN_SESSION', 'BAD_BIRTH_DATE', 'YOUNG', 'TOO_OLD', 'SHORT_MOTIVATION',
+  'NO_COURSE_CHOSEN', 'UNKNOWN_COURSE', 'UNKNOWN_SESSION', 'BAD_BIRTH_DATE', 'YOUNG', 'TOO_OLD', 'SHORT_MOTIVATION',
 ];
 
 export type FlagStatus = 'open' | 'approved' | 'overruled' | 'resolved';
@@ -102,6 +106,8 @@ export const FLAG_COLS = {
   detail: 'Detail',
   status: 'Status',
   note: 'Note',
+  /** Running log of actions taken / comments, one "yyyy-mm-dd user: text" line each. */
+  comments: 'Comments',
   createdAt: 'CreatedAt',
   resolvedBy: 'ResolvedBy',
   resolvedAt: 'ResolvedAt',

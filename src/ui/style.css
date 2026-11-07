@@ -70,6 +70,16 @@ button.link { border: none; background: none; color: var(--accent); text-decorat
 .checks { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0; }
 .chip { display: inline-block; border: 1px solid var(--line); border-radius: 12px; padding: 2px 8px; margin: 2px; }
 .pre { white-space: pre-wrap; }
+.comments ul { margin: 0 0 4px; padding-left: 16px; font-size: 0.85rem; }
+.w-comments { min-width: 280px; }
+.grow { flex: 1; min-width: 12em; }
+.fields label .plain { color: var(--text); padding: 4px 0; }
+.remarks { background: var(--warn); border-radius: 4px; padding: 6px 8px; margin: 6px 0; }
+.notes-caption { font-weight: 600; margin-right: 4px; }
+.ok-choice { display: inline-flex; gap: 2px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 1px 6px; margin: 2px; }
+.ok-choice.is-ok { background: var(--ok); border-color: var(--ok-line); }
+.ok-choice.is-notok { background: var(--err); border-color: var(--err-line); }
+.ok-choice select { border: none; background: transparent; padding: 0; }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px; text-decoration: none; color: var(--text); }
