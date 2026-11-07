@@ -96,7 +96,7 @@ Automate the Summer of Science application workflow (intake → checks → cours
 - **Google access:** OAuth token flow with the `drive.file` scope (the app only sees the Sheet it created) plus `email` for the audit-log user name. The access token lives only in memory (never in browser storage).
 - **Return visits (one click):** the browser remembers the Sheet's ID and title and the user's own e-mail (as sign-in hint). The start screen then shows one button "Continue as …"; Google's pop-up flashes and closes without account chooser or consent screen. A fully click-free reload isn't possible without a backend (Google requires a click to open its sign-in window) or without storing the token in the browser, which we don't do.
 - **App link:** "Copy app link to this Sheet" gives `…/sos-admin/?sheet=<ID>`; opening it preselects that Sheet (the ID is then remembered and removed from the address bar). The link holds no personal data.
-- **Colleagues (open):** with `drive.file`, a Sheet created by Daniel can't be opened by a colleague's app session even if shared in Drive. Options: (a) Google Picker — the colleague picks the Sheet once (needs the Picker API + a browser API key); (b) the broader `spreadsheets` scope. Colleagues must also be test users of the Google Cloud app while it stays in testing mode.
+- **Colleagues:** not supported yet — see §9 (still to be done / decided).
 
 ## 5. Stage 3 — payment
 
@@ -141,3 +141,18 @@ Automate the Summer of Science application workflow (intake → checks → cours
 - Exact quoting style and whether there's a BOM (the sample was re-saved by Excel). The parser must handle both.
 - Whether the original download contains blank rows (the sample had many, probably from clearing data in Excel). Skip them either way.
 - Unticked checkbox value (empty vs `FALSE`).
+
+## 9. Still to be done / decided
+
+*Parked items, collected here so nothing gets lost. Move an item into the relevant section once it is decided.*
+
+- **Colleague access to the master Sheet** (parked by Daniel, 7 Nov 2026). With the `drive.file` scope a colleague can't open a Sheet Daniel created, even when it's shared in Drive. Options:
+  - (a) *Google Picker* (recommended): the colleague picks the Sheet once in Google's file chooser; keeps the narrow permission. Needs the Picker API enabled and a browser API key restricted to `drmayerson.github.io` (~5 min setup).
+  - (b) *Broader `spreadsheets` scope*: no picker, but the app gets access to all of the colleague's Sheets.
+  - Either way: every colleague must be added as a test user (Google Cloud → Audience) while the app stays in testing mode (max. 100 users). The "Copy app link to this Sheet" link already exists for handing out the Sheet.
+- **Data protection:** DPO review before going live with real data, and the retention period for archived seasons (§2).
+- **Google account** that owns the master Sheet long-term: Daniel's own or a KU Leuven-linked account (§2).
+- **To confirm:** closing a young-student flag requires "Student dorm OK" only for FULL students (EVENING/DAY students don't sleep in the dorms).
+- **Real export details still unverified:** unticked checkbox value (empty vs `FALSE`); whether the fraction of a second in Posting Date/Time is always 6 digits (§8). Blank rows, BOM and unpadded time parts are handled.
+- **LLM delivery mechanism** for phase 4: export/import JSON files (default) or a direct API call with Daniel's own key (§6).
+- **New-season form changes** (payment form e-mail label + session radio button, proof-of-payment folder): see `REMINDERS.md`.
