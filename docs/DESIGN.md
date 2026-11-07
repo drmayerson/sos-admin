@@ -10,13 +10,25 @@ Automate the Summer of Science application workflow (intake → checks → cours
 
 - Static single-page app on GitHub Pages (`drmayerson.github.io/sos-admin/`), code only, no data in the repo. Not linked from the home page; `noindex`.
 - Google sign-in (OAuth token flow; Google Cloud project in "testing" mode with Daniel as test user) → the browser reads/writes the master Google Sheet through the Sheets API. Personal data only flows Google ↔ browser.
-- **The Sheet is the ground truth.** Tabs (proposal, to be confirmed with Daniel):
-  - `Applications` — one row per application: app-managed columns (ID, import key, status, flags, assignment, lock, fee, aid, payment, dates…) + the form fields.
-  - `RawImports` — every imported CSV row exactly as received, never modified.
-  - `Config` — season settings: sessions + start dates, courses per session with soft/hard capacity, dorm capacity per session, fees, thresholds, prerequisite rules, column mapping.
-  - `AuditLog` — every change made through the app: timestamp, user, ID, field, old value, new value, reason.
-  - `Schools` — school-name aliases with confirmed "Flemish: yes/no" (grows each year).
-  - `Payments` — imported payment-form rows + their matching state.
+- **The Sheet is the ground truth.** Tabs (agreed with Daniel, 7 Nov 2026). All columns are addressed by header name, so later phases simply add columns.
+  - `Applications` — one row per application.
+    - App-managed columns: `ID`, `ImportKey`, `PersonKey` (links one student's applications, e.g. both sessions), `PostingUTC` (ISO, GMT offset applied; used for ordering), `Status` (active / merged / withdrawn), `MergedInto`, `WithdrawnReason`, `Session` (S1/S2), `Choice1`–`Choice3` (normalised: "(Not applying…)" → empty), `FLStatus` (claimed / confirmed / rejected / n.a.), `OpenFlags` (read-only convenience summary; the `Flags` tab is the source of truth), young-student helpers `EmailSentCourse`, `CourseOK`, `EmailSentStudent`, `DormOK`, `OKForCourses`, and `Notes`.
+    - Form fields: the 41 data columns under their original header text (the 9 decorative columns are dropped).
+    - Phase 2 adds assignment, lock, fee, aid and admission columns.
+  - `Flags` — one row per flag: `FlagID`, `AppID`, `Type`, `Detail`, `Status` (open / approved / overruled / resolved), `Note`, `CreatedAt`, `ResolvedBy`, `ResolvedAt`. Resolved flags stay as history.
+  - `RawImports` — every imported CSV row exactly as received (+ `ImportedAt`, `RowNo`, `ImportKey`, `AppID`), never modified.
+  - `AuditLog` — every change made through the app (imports, edits, merges, flag decisions): `Timestamp`, `User`, `AppID`, `Field`, `OldValue`, `NewValue`, `Action`.
+  - `Config` — key/value rows: fees, thresholds, ID prefix, payment deadline days, column mapping (`map.<field>` → header text).
+  - `Sessions` — key, form label, start date, dorm capacity.
+  - `Courses` — session, code, soft max, hard max (phase 2 adds prerequisite rule / "no prerequisites").
+  - `Schools` (phase 4) — school-name aliases with confirmed "Flemish: yes/no" (grows each year).
+  - `Payments` (phase 3) — imported payment-form rows + their matching state.
+- **Phase 1 screens:** Home (counts, demo banner), Season setup (incl. column-mapping check), Import CSV (encoding check → preview → confirm), Near-duplicate merge, Young students, Flags, Applications (search/detail/edit/history), Audit log.
+- **Exact duplicate** = all form fields except the timestamp equal after trimming, whitespace collapsing and case-folding. Exact duplicates get no ID and no `Applications` row: they are kept only in `RawImports` (column `DuplicateOf`) and noted in the `AuditLog` of the original.
+- **Flemish claim** in phase 1 only sets `FLStatus = claimed` (no flag), so the Flags list isn't swamped; the school check comes in phase 4.
+- **Automatic flags are re-checked after every edit/merge:** new problems get a flag; open automatic flags that no longer apply are closed as "resolved" (logged); a flag a human approved/overruled is never re-raised.
+- **Merge** keeps the earlier application's ID and timestamp; default choice per differing field is the later (corrected) value.
+- **Medical/dietary fields** are hidden on the application screen until "Show" is clicked.
 - **One Sheet per season.** A "Start new season" wizard creates a fresh Sheet, carries over the column mapping (the form is expected to stay identical apart from course codes, dates and year-specific header text such as "2025-2026" / "July 2026"), asks for courses/capacities/dates/fees, and shows the setup checklist (`REMINDERS.md`). The previous Sheet is archived read-only and viewable from a season switcher. Retention period for archived personal data: to be decided with KU Leuven's data protection officer (DPO).
 - Google account: initially Daniel's own or a KU Leuven-linked account; the app must not hard-code it (moving = copy the Sheet, point the app at it).
 - DPO review before going live with real data.
