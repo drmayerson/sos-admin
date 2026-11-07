@@ -1,0 +1,692 @@
+[
+ {
+  "row": 1,
+  "matchesId": "SOS26-0174",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 2,
+  "matchesId": "SOS26-0164",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 3,
+  "matchesId": "SOS26-0071",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 4,
+  "matchesId": "SOS26-0155",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 5,
+  "matchesId": "SOS26-0142",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 6,
+  "matchesId": "SOS26-0044",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 7,
+  "matchesId": "SOS26-0011",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 8,
+  "matchesId": "SOS26-0129",
+  "method": "email_student (case/whitespace)",
+  "case": "P03"
+ },
+ {
+  "row": 9,
+  "matchesId": "SOS26-0070",
+  "method": "name_exact",
+  "case": "P04"
+ },
+ {
+  "row": 10,
+  "matchesId": "SOS26-0185",
+  "method": "name_fuzzy (no accents)",
+  "case": "P05"
+ },
+ {
+  "row": 11,
+  "matchesId": "SOS26-0003",
+  "method": "name_fuzzy (reversed order)",
+  "case": "P06"
+ },
+ {
+  "row": 12,
+  "matchesId": "SOS26-0143",
+  "method": "parent_name",
+  "case": "P07"
+ },
+ {
+  "row": 13,
+  "matchesId": "SOS26-0030",
+  "method": "name_fuzzy (first name only + surname typo)",
+  "case": "P08"
+ },
+ {
+  "row": 14,
+  "matchesId": "SOS26-0117",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 15,
+  "matchesId": "SOS26-0180",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 16,
+  "matchesId": "SOS26-0112",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 17,
+  "matchesId": "SOS26-0126",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 18,
+  "matchesId": "SOS26-0122",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 19,
+  "matchesId": "SOS26-0027",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 20,
+  "matchesId": "SOS26-0203",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 21,
+  "matchesId": "SOS26-0004",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 22,
+  "matchesId": "SOS26-0113",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 23,
+  "matchesId": "SOS26-0176",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 24,
+  "matchesId": "SOS26-0170",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 25,
+  "matchesId": "SOS26-0140",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 26,
+  "matchesId": "SOS26-0199",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 27,
+  "matchesId": "SOS26-0188",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 28,
+  "matchesId": "SOS26-0092",
+  "method": "email_student (case/whitespace)",
+  "case": "P03"
+ },
+ {
+  "row": 29,
+  "matchesId": "SOS26-0116",
+  "method": "name_exact",
+  "case": "P04"
+ },
+ {
+  "row": 30,
+  "matchesId": "SOS26-0022",
+  "method": "name_fuzzy (no accents)",
+  "case": "P05"
+ },
+ {
+  "row": 31,
+  "matchesId": "SOS26-0032",
+  "method": "name_fuzzy (reversed order)",
+  "case": "P06"
+ },
+ {
+  "row": 32,
+  "matchesId": "SOS26-0035",
+  "method": "parent_name",
+  "case": "P07"
+ },
+ {
+  "row": 33,
+  "matchesId": "SOS26-0145",
+  "method": "name_fuzzy (first name only + surname typo)",
+  "case": "P08"
+ },
+ {
+  "row": 34,
+  "matchesId": "SOS26-0208",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 35,
+  "matchesId": "SOS26-0050",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 36,
+  "matchesId": "SOS26-0033",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 37,
+  "matchesId": "SOS26-0066",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 38,
+  "matchesId": "SOS26-0041",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 39,
+  "matchesId": "SOS26-0094",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 40,
+  "matchesId": "SOS26-0025",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 41,
+  "matchesId": "SOS26-0159",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 42,
+  "matchesId": "SOS26-0063",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 43,
+  "matchesId": "SOS26-0007",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 44,
+  "matchesId": "SOS26-0156",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 45,
+  "matchesId": "SOS26-0006",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 46,
+  "matchesId": "SOS26-0150",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 47,
+  "matchesId": "SOS26-0147",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 48,
+  "matchesId": "SOS26-0127",
+  "method": "email_student (case/whitespace)",
+  "case": "P03"
+ },
+ {
+  "row": 49,
+  "matchesId": "SOS26-0013",
+  "method": "name_exact",
+  "case": "P04"
+ },
+ {
+  "row": 50,
+  "matchesId": "SOS26-0172",
+  "method": "name_fuzzy (no accents)",
+  "case": "P05"
+ },
+ {
+  "row": 51,
+  "matchesId": "SOS26-0161",
+  "method": "name_fuzzy (reversed order)",
+  "case": "P06"
+ },
+ {
+  "row": 52,
+  "matchesId": "SOS26-0093",
+  "method": "parent_name",
+  "case": "P07"
+ },
+ {
+  "row": 53,
+  "matchesId": "SOS26-0107",
+  "method": "name_fuzzy (first name only + surname typo)",
+  "case": "P08"
+ },
+ {
+  "row": 54,
+  "matchesId": "SOS26-0186",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 55,
+  "matchesId": "SOS26-0067",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 56,
+  "matchesId": "SOS26-0184",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 57,
+  "matchesId": "SOS26-0194",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 58,
+  "matchesId": "SOS26-0014",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 59,
+  "matchesId": "SOS26-0196",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 60,
+  "matchesId": "SOS26-0062",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 61,
+  "matchesId": "SOS26-0195",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 62,
+  "matchesId": "SOS26-0132",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 63,
+  "matchesId": "SOS26-0042",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 64,
+  "matchesId": "SOS26-0189",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 65,
+  "matchesId": "SOS26-0149",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 66,
+  "matchesId": "SOS26-0154",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 67,
+  "matchesId": "SOS26-0201",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 68,
+  "matchesId": "SOS26-0157",
+  "method": "email_student (case/whitespace)",
+  "case": "P03"
+ },
+ {
+  "row": 69,
+  "matchesId": "SOS26-0202",
+  "method": "name_exact",
+  "case": "P04"
+ },
+ {
+  "row": 70,
+  "matchesId": "SOS26-0171",
+  "method": "name_fuzzy (no accents)",
+  "case": "P05"
+ },
+ {
+  "row": 71,
+  "matchesId": "SOS26-0141",
+  "method": "name_fuzzy (reversed order)",
+  "case": "P06"
+ },
+ {
+  "row": 72,
+  "matchesId": "SOS26-0166",
+  "method": "parent_name",
+  "case": "P07"
+ },
+ {
+  "row": 73,
+  "matchesId": "SOS26-0085",
+  "method": "name_fuzzy (first name only + surname typo)",
+  "case": "P08"
+ },
+ {
+  "row": 74,
+  "matchesId": "SOS26-0110",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 75,
+  "matchesId": "SOS26-0179",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 76,
+  "matchesId": "SOS26-0103",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 77,
+  "matchesId": "SOS26-0090",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 78,
+  "matchesId": "SOS26-0148",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 79,
+  "matchesId": "SOS26-0069",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 80,
+  "matchesId": "SOS26-0047",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 81,
+  "matchesId": "SOS26-0191",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 82,
+  "matchesId": "SOS26-0040",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 83,
+  "matchesId": "SOS26-0175",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 84,
+  "matchesId": "SOS26-0102",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 85,
+  "matchesId": "SOS26-0124",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 86,
+  "matchesId": "SOS26-0095",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 87,
+  "matchesId": "SOS26-0146",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 88,
+  "matchesId": "SOS26-0015",
+  "method": "email_student (case/whitespace)",
+  "case": "P03"
+ },
+ {
+  "row": 89,
+  "matchesId": "SOS26-0017",
+  "method": "name_exact",
+  "case": "P04"
+ },
+ {
+  "row": 90,
+  "matchesId": "SOS26-0026",
+  "method": "name_fuzzy (no accents)",
+  "case": "P05"
+ },
+ {
+  "row": 91,
+  "matchesId": "SOS26-0128",
+  "method": "name_fuzzy (reversed order)",
+  "case": "P06"
+ },
+ {
+  "row": 92,
+  "matchesId": "SOS26-0190",
+  "method": "parent_name",
+  "case": "P07"
+ },
+ {
+  "row": 93,
+  "matchesId": "SOS26-0144",
+  "method": "name_fuzzy (first name only + surname typo)",
+  "case": "P08"
+ },
+ {
+  "row": 94,
+  "matchesId": "SOS26-0168",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 95,
+  "matchesId": "SOS26-0008",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 96,
+  "matchesId": "SOS26-0135",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 97,
+  "matchesId": "SOS26-0153",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 98,
+  "matchesId": "SOS26-0084",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 99,
+  "matchesId": "SOS26-0193",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 100,
+  "matchesId": "SOS26-0115",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 101,
+  "matchesId": "SOS26-0089",
+  "method": "email_student",
+  "case": null
+ },
+ {
+  "row": 102,
+  "matchesId": "SOS26-0064",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 103,
+  "matchesId": "SOS26-0133",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 104,
+  "matchesId": "SOS26-0139",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 105,
+  "matchesId": "SOS26-0037",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 106,
+  "matchesId": "SOS26-0125",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 107,
+  "matchesId": "SOS26-0163",
+  "method": "email_parent",
+  "case": null
+ },
+ {
+  "row": 108,
+  "matchesId": "SOS26-0198",
+  "method": "email_student (case/whitespace)",
+  "case": "P03"
+ },
+ {
+  "row": 109,
+  "matchesId": "SOS26-0074",
+  "method": "name_exact",
+  "case": "P04"
+ },
+ {
+  "row": 110,
+  "matchesId": "SOS26-0021",
+  "method": "name_fuzzy (no accents)",
+  "case": "P05"
+ },
+ {
+  "row": 111,
+  "matchesId": null,
+  "method": "unmatched",
+  "case": "P09"
+ },
+ {
+  "row": 112,
+  "matchesId": [
+   "SOS26-0058",
+   "SOS26-0059"
+  ],
+  "method": "email_student (two applications — ambiguous session)",
+  "case": "P10"
+ },
+ {
+  "row": 113,
+  "matchesId": [
+   "SOS26-0058",
+   "SOS26-0059"
+  ],
+  "method": "email_student (two applications — ambiguous session)",
+  "case": "P10"
+ },
+ {
+  "row": 114,
+  "matchesId": "SOS26-0174",
+  "method": "exact duplicate of row 1",
+  "case": "P12"
+ }
+]

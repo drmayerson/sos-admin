@@ -1,0 +1,103 @@
+{
+  "_note": "Synthetic season config for testing. Capacities are invented, not the real 2026 values.",
+  "season": "2026",
+  "idPrefix": "SOS26",
+  "sessions": [
+    {
+      "label": "Session I (20-24 July 2026)",
+      "key": "S1",
+      "startDate": "2026-07-20",
+      "courses": [
+        {
+          "code": "ASTROPLASMA",
+          "softMax": 14,
+          "hardMax": 16
+        },
+        {
+          "code": "MAGNETISM",
+          "softMax": 14,
+          "hardMax": 16
+        },
+        {
+          "code": "NUCLEAR",
+          "softMax": 14,
+          "hardMax": 16
+        },
+        {
+          "code": "QUANTUM",
+          "softMax": 14,
+          "hardMax": 16
+        }
+      ],
+      "dormCapacity": 40
+    },
+    {
+      "label": "Session II (3-7 August 2026)",
+      "key": "S2",
+      "startDate": "2026-08-03",
+      "courses": [
+        {
+          "code": "AVATAR",
+          "softMax": 13,
+          "hardMax": 15
+        },
+        {
+          "code": "ATOMIC",
+          "softMax": 13,
+          "hardMax": 15
+        },
+        {
+          "code": "BLACKHOLES",
+          "softMax": 13,
+          "hardMax": 15
+        },
+        {
+          "code": "CELLNANO",
+          "softMax": 13,
+          "hardMax": 15
+        },
+        {
+          "code": "EXPTECH",
+          "softMax": 13,
+          "hardMax": 15
+        },
+        {
+          "code": "PROTEINS",
+          "softMax": 13,
+          "hardMax": 15
+        },
+        {
+          "code": "RELATIVITY",
+          "softMax": 13,
+          "hardMax": 15
+        }
+      ],
+      "dormCapacity": 70
+    }
+  ],
+  "fees": {
+    "FULL": {
+      "FL": 380,
+      "other": 430
+    },
+    "EVENING": {
+      "FL": 280,
+      "other": 330
+    },
+    "DAY": {
+      "FL": 200,
+      "other": 250
+    }
+  },
+  "thresholds": {
+    "youngMaxAge": 14,
+    "youngYearsLeft": ">2",
+    "oldMinAge": 19,
+    "minMotivationWords": 50
+  },
+  "paymentDeadlineDays": 14,
+  "payment": {
+    "structuredReference": "+++400/0029/31560+++",
+    "iban": "BE60 7340 0666 0370"
+  }
+}

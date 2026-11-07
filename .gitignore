@@ -1,0 +1,20 @@
+# Never commit real data: CSV/Excel files are only allowed inside test-data/
+*.csv
+*.xlsx
+*.xls
+!test-data/*.csv
+real-data/
+private/
+
+# Secrets
+.env
+.env.*
+
+# Build / tooling
+node_modules/
+dist/
+.vite/
+coverage/
+__pycache__/
+.DS_Store
+Thumbs.db
