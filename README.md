@@ -7,7 +7,7 @@ Admin tool for the KU Leuven **Summer of Science** application workflow: import 
 
 Docs: [`docs/DESIGN.md`](docs/DESIGN.md) · [`docs/REMINDERS.md`](docs/REMINDERS.md) · [`docs/ORIGINAL_PLAN.md`](docs/ORIGINAL_PLAN.md) · test data: [`test-data/`](test-data/)
 
-Status: phase 1 (import, checks, review screens, audit log) and phase 2 (Google Sheets connection, assignment with preview, waitlist, dorm-full list, locking, fees, financial aid, admission mail merge) built. Phase 3 (payments) next.
+Status: phases 1–4 built: import and checks, Google Sheets, assignment, locking, fees and aid, admissions, payments (matching, proof check with in-browser text recognition, reminders), LLM packets (Flemish schools, motivation, prerequisites), rosters and lists, new-season archive.
 
 ## Running it
 
@@ -16,7 +16,7 @@ Needs Node.js 20.19+ (or 22.12+).
 ```bash
 npm install
 npm test          # unit tests against test-data/ (the oracle in expected_applications.json)
-npm run dev       # http://localhost:5173/sos-admin/
+npm run dev       # http://localhost:5173/sos-admin/ (first copies the OCR engine into public/ocr/)
 npm run build     # production build in dist/
 ```
 

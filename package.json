@@ -4,15 +4,20 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/copy-ocr.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/copy-ocr.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@tesseract.js-data/eng": "^1.0.0",
     "papaparse": "^5.7.0",
+    "pdfjs-dist": "^6.5.438",
     "preact": "^11.2.0",
+    "tesseract.js": "^7.0.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {

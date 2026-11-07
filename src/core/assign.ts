@@ -191,6 +191,7 @@ export function lockBlockers(app: Row, flags: Row[]): string[] {
   if (!isActive(app)) w.push(`status is ${app[APP_COLS.status]}`);
   if (!app[APP_COLS.assignedCourse]) w.push('no course assigned');
   if (app[APP_COLS.dormWaiting] === 'TRUE') w.push('waiting for a dorm place');
+  if (app[APP_COLS.flStatus] === 'claimed') w.push('Flemish school not yet confirmed or rejected');
   if (flags.some((f) => f[FLAG_COLS.appId] === app[APP_COLS.id] && f[FLAG_COLS.type] === 'YOUNG' && f[FLAG_COLS.status] === 'open'))
     w.push('young-student flag still open');
   return w;

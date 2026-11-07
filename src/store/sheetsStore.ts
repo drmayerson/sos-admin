@@ -33,6 +33,10 @@ export class SheetsStore implements TableStore {
     this.cache.clear();
   }
 
+  async protect(): Promise<void> {
+    await this.api.protectSheets([...this.sheets.values()].map((s) => s.sheetId), 'Archived SOS season — read only');
+  }
+
   async readAll(table: TableName): Promise<Row[]> {
     if (!this.cache.has(table)) {
       const [values] = await this.api.batchGet([tab(table)]);

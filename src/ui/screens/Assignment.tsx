@@ -1,5 +1,7 @@
 import { useState } from 'preact/hooks';
-import { isActive, isLocked, runAssignment, type AssignChange, type AssignResult } from '../../core/assign';
+import { isActive, isLocked, priorityCompare, runAssignment, type AssignChange, type AssignResult } from '../../core/assign';
+import { ageOn } from '../../core/dates';
+import { field } from '../../core/flags';
 import { effectiveAccommodation } from '../../core/fees';
 import { APP_COLS } from '../../core/types';
 import { fullName, useApp } from '../ctx';
@@ -17,6 +19,7 @@ const KIND: Record<AssignChange['kind'], string> = {
 export function Assignment() {
   const { snap, repo, run } = useApp();
   const [preview, setPreview] = useState<{ result: AssignResult; changes: AssignChange[]; stale: number } | null>(null);
+  const [roster, setRoster] = useState('');
   if (!snap.cfg) return <p class="warn">Set up the season first.</p>;
   const cfg = snap.cfg;
   const active = snap.apps.filter(isActive);
@@ -73,9 +76,15 @@ export function Assignment() {
             {cfg.courses.filter((c) => c.session === s.key).map((c) => {
               const n = current(c.code);
               const w = waitingFor.courses.find((x) => x.code === c.code)?.waiting ?? 0;
+              const list = active.filter((a) => a[APP_COLS.assignedCourse] === c.code).sort(priorityCompare);
               return (
+                <>
                 <tr>
-                  <td>{c.code}</td>
+                  <td>
+                    <button class="link" title="Show who is assigned" onClick={() => setRoster(roster === c.code ? '' : c.code)}>
+                      {roster === c.code ? '▾' : '▸'} {c.code}
+                    </button>
+                  </td>
                   <td>{n}</td>
                   <td>{lockedIn(c.code)}</td>
                   <td><LimitInput value={c.limit} max={c.hardMax} onSave={(v) => setLimit(c.code, v)} /></td>
@@ -87,6 +96,30 @@ export function Assignment() {
                     {n > c.softMax && <span class="badge">above soft max</span>}
                   </td>
                 </tr>
+                {roster === c.code && (
+                  <tr>
+                    <td colSpan={7} class="roster">
+                      {list.length === 0 ? <span class="muted">Nobody assigned.</span> : (
+                        <table><tbody>
+                          <tr><th>#</th><th>ID</th><th>Name</th><th>Locked</th><th>FL</th><th>Acc.</th><th>Age on start</th><th>How</th></tr>
+                          {list.map((a, i) => (
+                            <tr>
+                              <td>{i + 1}</td>
+                              <td><a href={`#/apps/${a[APP_COLS.id]}`}>{a[APP_COLS.id]}</a></td>
+                              <td>{fullName(a, cfg)}</td>
+                              <td>{isLocked(a) ? <b>🔒 locked</b> : <span class="muted">no</span>}</td>
+                              <td>{a[APP_COLS.flStatus] === 'n.a.' || a[APP_COLS.flStatus] === 'rejected' ? '' : a[APP_COLS.flStatus]}</td>
+                              <td>{effectiveAccommodation(a, cfg)}{a[APP_COLS.dormWaiting] === 'TRUE' && ' (no dorm yet)'}</td>
+                              <td>{ageOn(field(a, cfg, 'birthDate'), s.startDate) ?? '?'}</td>
+                              <td class="small">{a[APP_COLS.assignNote]}</td>
+                            </tr>
+                          ))}
+                        </tbody></table>
+                      )}
+                    </td>
+                  </tr>
+                )}
+                </>
               );
             })}
           </tbody></table>

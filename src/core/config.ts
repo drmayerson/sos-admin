@@ -9,6 +9,7 @@ export interface ConfigJson {
   fees: Record<Accommodation, { FL: number; other: number }>;
   thresholds: SeasonConfig['thresholds'];
   paymentDeadlineDays: number;
+  payment?: { structuredReference: string; iban: string };
 }
 
 export const FLEMISH_STATUS_2026 = 'Student at a Flemish (Dutch-speaking) school';
@@ -24,8 +25,12 @@ export function configFromJson(j: ConfigJson): SeasonConfig {
     fees: structuredClone(j.fees),
     thresholds: { ...j.thresholds },
     paymentDeadlineDays: j.paymentDeadlineDays,
+    reminderDays: 7,
+    paymentReference: j.payment?.structuredReference ?? '+++400/0029/31560+++',
+    paymentIban: j.payment?.iban ?? 'BE60 7340 0666 0370',
     columnMap: { ...COLUMN_MAP_2026 },
     flemishStatusValue: FLEMISH_STATUS_2026,
+    archived: false,
   };
 }
 
@@ -44,7 +49,11 @@ export function configToTables(c: SeasonConfig): ConfigTables {
     ['season', c.season],
     ['idPrefix', c.idPrefix],
     ['paymentDeadlineDays', String(c.paymentDeadlineDays)],
+    ['reminderDays', String(c.reminderDays)],
+    ['paymentReference', c.paymentReference],
+    ['paymentIban', c.paymentIban],
     ['flemishStatusValue', c.flemishStatusValue],
+    ['archived', c.archived ? 'TRUE' : ''],
     ['threshold.youngMaxAge', String(c.thresholds.youngMaxAge)],
     ['threshold.youngYearsLeft', c.thresholds.youngYearsLeft],
     ['threshold.oldMinAge', String(c.thresholds.oldMinAge)],
@@ -84,7 +93,11 @@ export function configFromTables(t: ConfigTables): SeasonConfig {
     season: kv.get('season') ?? '',
     idPrefix: kv.get('idPrefix') ?? 'SOS',
     paymentDeadlineDays: num('paymentDeadlineDays'),
+    reminderDays: kv.has('reminderDays') ? num('reminderDays') : 7,
+    paymentReference: kv.get('paymentReference') ?? '+++400/0029/31560+++',
+    paymentIban: kv.get('paymentIban') ?? 'BE60 7340 0666 0370',
     flemishStatusValue: kv.get('flemishStatusValue') ?? FLEMISH_STATUS_2026,
+    archived: kv.get('archived') === 'TRUE',
     thresholds: {
       youngMaxAge: num('threshold.youngMaxAge'),
       youngYearsLeft: kv.get('threshold.youngYearsLeft') ?? '>2',
@@ -151,4 +164,23 @@ export function choiceFields(c: SeasonConfig): Record<string, [FieldKey, FieldKe
 /** Courses with neither a prerequisite rule nor an explicit "no prerequisites" tick (assignment refuses to run). */
 export function coursesMissingPrereqs(c: SeasonConfig): string[] {
   return c.courses.filter((x) => x.minAge === null && !x.noPrereqs).map((x) => x.code);
+}
+
+/** Settings for the next season, carried over from this one: column mapping, courses, prerequisites, fees, thresholds.
+ * Session labels/dates still contain the old year and must be checked in Season setup. */
+export function nextSeasonConfig(c: SeasonConfig, season: string): SeasonConfig {
+  const n = structuredClone(c);
+  n.season = season;
+  n.idPrefix = `SOS${season.slice(-2)}`;
+  n.archived = false;
+  for (const x of n.courses) x.limit = x.softMax;
+  const shift = Number(season) - Number(c.season);
+  if (Number.isFinite(shift) && shift > 0)
+    for (const s of n.sessions) {
+      const d = new Date(`${s.startDate}T12:00:00Z`);
+      d.setUTCFullYear(d.getUTCFullYear() + shift);
+      s.startDate = d.toISOString().slice(0, 10);
+      s.label = s.label.replace(/\b(20\d\d)\b/g, (y) => String(Number(y) + shift));
+    }
+  return n;
 }

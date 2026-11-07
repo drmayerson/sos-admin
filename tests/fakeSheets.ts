@@ -87,6 +87,11 @@ export class FakeSheetsApi implements SheetsApi {
     for (const g of this.grids.values()) if (g.id === sheetId) g.cols += count;
   }
 
+  protected_: number[] = [];
+  async protectSheets(sheetIds: number[]): Promise<void> {
+    this.protected_.push(...sheetIds);
+  }
+
   /** Simulate a human sorting the data rows of a tab by a column, descending. */
   sortByColumnDesc(title: string, col: number) {
     const g = this.grids.get(title)!;

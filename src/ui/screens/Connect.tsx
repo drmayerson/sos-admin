@@ -81,6 +81,14 @@ export function Connect({ onReady }: { onReady: (repo: Repo, sheetId: string) =>
           ) : (
             <>
               <p>Signed in as <b>{email}</b>.</p>
+              {rem.seasons.filter((x) => x.id !== rem.sheetId).length > 0 && (
+                <div>
+                  <b>Other seasons opened in this browser:</b>
+                  {rem.seasons.filter((x) => x.id !== rem.sheetId).map((x) => (
+                    <div><button class="link" disabled={!!busy} onClick={() => open(x.id)}>{x.title}</button></div>
+                  ))}
+                </div>
+              )}
               <div class="row">
                 <input class="wide" placeholder="Sheet ID or URL" value={sheetInput} onInput={(e) => setSheetInput((e.target as HTMLInputElement).value)} />
                 <button class="primary" disabled={!sheetInput.trim() || !!busy} onClick={() => open(parseSheetId(sheetInput))}>

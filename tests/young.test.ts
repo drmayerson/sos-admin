@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Repo } from '../src/core/repo';
 import { MemoryTableStore } from '../src/core/store';
 import { APP_COLS, FLAG_COLS } from '../src/core/types';
-import { courseDecisions, youngCloseWarnings } from '../src/core/young';
+import { courseDecisions, youngCloseCheck } from '../src/core/young';
 import { cfg, expected, syntheticCsv } from './helpers';
 
 async function setup() {
@@ -24,25 +24,29 @@ describe('young students', () => {
     expect(courseDecisions(a)).toEqual({ ATOMIC: 'OK', RELATIVITY: 'OK', AVATAR: 'NOT OK' });
   });
 
-  it('warns before closing unless the assigned course is OK and (FULL students) the dorm is OK', async () => {
+  it('closing needs an OK course that is also the assigned one; dorm is only a warning (FULL students)', async () => {
     const { repo, id, app } = await setup();
     const c = cfg();
-    expect(youngCloseWarnings(await app(), c)).toContain('No course is assigned yet.');
+    expect(youngCloseCheck(await app(), c).blockers).toEqual(['No course is marked OK yet.', 'The student has no course assigned.']);
     await repo.updateApplication(id, { [APP_COLS.assignedCourse]: 'ATOMIC', [c.columnMap.accommodation]: 'FULL' });
-    expect(youngCloseWarnings(await app(), c)).toEqual([
-      'The assigned course ATOMIC is not marked OK.',
-      '"Student dorm OK" is not ticked (FULL student).',
-    ]);
+    await repo.setCourseDecisions(id, { RELATIVITY: 'OK' });
+    expect(youngCloseCheck(await app(), c)).toEqual({
+      blockers: ['The assigned course ATOMIC is not marked OK.'],
+      warnings: ['"Student dorm OK" is not ticked (FULL student).'],
+    });
+    await expect(repo.closeYoungFlag(id, '')).rejects.toThrow(/not marked OK/);
     await repo.setCourseDecisions(id, { ATOMIC: 'OK' });
+    expect(youngCloseCheck(await app(), c).blockers).toEqual([]);
     await repo.updateApplication(id, { [APP_COLS.dormOK]: 'TRUE' });
-    expect(youngCloseWarnings(await app(), c)).toEqual([]);
+    expect(youngCloseCheck(await app(), c)).toEqual({ blockers: [], warnings: [] });
     await repo.updateApplication(id, { [c.columnMap.accommodation]: 'DAY', [APP_COLS.dormOK]: '' });
-    expect(youngCloseWarnings(await app(), c)).toEqual([]); // dorm irrelevant for DAY students
+    expect(youngCloseCheck(await app(), c).warnings).toEqual([]); // dorm irrelevant for DAY students
   });
 
   it('closing remembers the assigned course (so a reassignment can reopen the flag in phase 2)', async () => {
     const { repo, id, app } = await setup();
     await repo.updateApplication(id, { [APP_COLS.assignedCourse]: 'ATOMIC' });
+    await repo.setCourseDecisions(id, { ATOMIC: 'OK' });
     await repo.closeYoungFlag(id, 'teacher agreed');
     const s = await repo.snapshot();
     expect((await app())[APP_COLS.youngApprovedWith]).toBe('ATOMIC');

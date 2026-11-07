@@ -13,7 +13,11 @@ import { Flags } from './screens/Flags';
 import { Home } from './screens/Home';
 import { Import } from './screens/Import';
 import { Locking } from './screens/Locking';
+import { Exports } from './screens/Exports';
+import { LlmChecks, Schools } from './screens/LlmScreens';
 import { Merge } from './screens/Merge';
+import { NewSeason } from './screens/NewSeason';
+import { PaymentImport, PaymentMatch, Proofs, Unpaid } from './screens/Payments';
 import { Setup } from './screens/Setup';
 import { Waitlist } from './screens/Waitlist';
 import { Young } from './screens/Young';
@@ -34,8 +38,18 @@ const NAV: [string, string][] = [
   ['lock', 'Locking'],
   ['aid', 'Financial aid'],
   ['admit', 'Admissions'],
+  ['-', 'Payments'],
+  ['payimport', 'Import payments'],
+  ['paymatch', 'Match payments'],
+  ['proofs', 'Proof of payment'],
+  ['unpaid', 'Awaiting payment'],
+  ['-', 'Checks & lists'],
+  ['schools', 'Flemish schools'],
+  ['llm', 'LLM checks'],
+  ['exports', 'Rosters & lists'],
   ['-', ''],
   ['audit', 'Audit log'],
+  ['newseason', 'New season'],
 ];
 
 function useHashRoute(): string[] {
@@ -117,6 +131,14 @@ function Main({ repo, sheetId, onDisconnect }: { repo: Repo; sheetId: string; on
     lock: () => <Locking />,
     aid: () => <FinancialAid />,
     admit: () => <Admissions />,
+    payimport: () => <PaymentImport />,
+    paymatch: () => <PaymentMatch />,
+    proofs: () => <Proofs />,
+    unpaid: () => <Unpaid />,
+    schools: () => <Schools />,
+    llm: () => <LlmChecks />,
+    exports: () => <Exports />,
+    newseason: () => <NewSeason />,
     audit: () => <Audit />,
   };
   const body = (screens[page] ?? (() => <Home />))();
@@ -124,6 +146,7 @@ function Main({ repo, sheetId, onDisconnect }: { repo: Repo; sheetId: string; on
   return (
     <AppCtx.Provider value={ctx}>
       {repo.store.isDemo && <div class="demo-banner">DEMO — synthetic data only, kept in this tab's memory (lost on reload)</div>}
+      {snap.cfg?.archived && <div class="demo-banner archived">ARCHIVED SEASON {snap.cfg.season} — read-only</div>}
       <div class="layout">
         <nav>
           <div class="brand">SOS admin</div>

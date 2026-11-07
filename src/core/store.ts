@@ -1,6 +1,6 @@
 import type { Row } from './types';
 
-export const TABLES = ['Applications', 'Flags', 'RawImports', 'AuditLog', 'Config', 'Sessions', 'Courses'] as const;
+export const TABLES = ['Applications', 'Flags', 'RawImports', 'AuditLog', 'Config', 'Sessions', 'Courses', 'Payments', 'Schools'] as const;
 export type TableName = (typeof TABLES)[number];
 
 /**
@@ -20,6 +20,36 @@ export interface TableStore {
   replace(table: TableName, rows: Row[]): Promise<void>;
   /** Forget cached data so the next read fetches fresh (e.g. after editing the Sheet by hand). */
   refresh?(): void;
+  /** Protect all tabs against accidental edits (archived seasons). */
+  protect?(): Promise<void>;
+}
+
+/** Wraps a store so that every write fails: used for archived seasons. */
+export class ReadOnlyStore implements TableStore {
+  readonly isDemo: boolean;
+  readonly label: string;
+  constructor(private inner: TableStore) {
+    this.isDemo = inner.isDemo;
+    this.label = `${inner.label} (archived, read-only)`;
+  }
+  readAll(table: TableName) {
+    return this.inner.readAll(table);
+  }
+  refresh() {
+    this.inner.refresh?.();
+  }
+  private no(): Promise<void> {
+    return Promise.reject(new Error('This season is archived: it can only be viewed, not changed.'));
+  }
+  append() {
+    return this.no();
+  }
+  update() {
+    return this.no();
+  }
+  replace() {
+    return this.no();
+  }
 }
 
 /** In-memory implementation. Used by the demo mode and the unit tests. */

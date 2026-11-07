@@ -113,3 +113,10 @@ tr.row-warn td { background: #fff4e5; }
 .connect { max-width: 720px; margin: 40px auto; padding: 0 16px; }
 button.big { font-size: 1.05rem; padding: 8px 18px; }
 nav .sheet-title { color: #fff; margin-bottom: 2px; }
+td.roster { background: #f3f6fa; padding: 6px 12px 12px; }
+tr.row-ok td { background: #eef8f0; }
+.dropzone { border: 2px dashed #b7bec9; border-radius: 8px; padding: 14px; margin: 10px 0; background: #fff; }
+label.cand { display: block; padding: 2px 0; }
+img.proof { max-width: 420px; max-height: 300px; display: block; margin-top: 4px; border: 1px solid var(--line); }
+.demo-banner.archived { background: #8a5a00; }
+pre.sample { background: #f3f6fa; padding: 8px; white-space: pre-wrap; font-size: 0.8rem; max-height: 300px; overflow: auto; }

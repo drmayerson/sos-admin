@@ -1,6 +1,6 @@
 # Reminders — setting up a new season
 
-Daniel asked to be reminded of these when the new forms are made. The app's "Start new season" wizard should show this checklist.
+Daniel asked to be reminded of these when the new forms are made. The app's **New season** screen shows this checklist (keep both in sync).
 
 ## Forms (KU Leuven website)
 

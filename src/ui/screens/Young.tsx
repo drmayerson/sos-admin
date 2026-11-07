@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { ageOn } from '../../core/dates';
 import { field } from '../../core/flags';
 import { APP_COLS, FLAG_COLS, type Row, type SeasonConfig } from '../../core/types';
-import { courseDecisions, youngCloseWarnings, type CourseDecision } from '../../core/young';
+import { courseDecisions, youngCloseCheck, type CourseDecision } from '../../core/young';
 import { choicesText, fullName, useApp } from '../ctx';
 import { FlagComments } from '../FlagComments';
 
@@ -28,8 +28,8 @@ export function Young() {
       <p>
         Students with "{snap.cfg.thresholds.youngYearsLeft}" years left, or aged {snap.cfg.thresholds.youngMaxAge} or younger on
         the session start date. Mark courses <b>OK</b> or <b>NOT OK</b> (any course in the session); the assignment
-        algorithm respects both, and decides freely where there is no decision. Close the flag with <b>OK</b> once the
-        assigned course is OK and the dorm is OK.
+        algorithm respects both, and decides freely where there is no decision. <b>OK</b> closes the flag; it needs the
+        student to be assigned to a course marked OK (and asks for confirmation if the dorm isn't OK for a FULL student).
       </p>
       <label><input type="checkbox" checked={showAll} onChange={() => setShowAll(!showAll)} /> Also show closed flags</label>
       <p class="muted">{items.length} student(s)</p>
@@ -53,9 +53,9 @@ function YoungCard({ flag, app, cfg }: { flag: Row; app: Row; cfg: SeasonConfig 
   const assigned = app[APP_COLS.assignedCourse];
 
   const setNoteBox = (col: string) => run(() => repo.updateApplication(id, { [col]: app[col] === 'TRUE' ? '' : 'TRUE' }, 'young review'));
+  const check = youngCloseCheck(app, cfg);
   const close = () => {
-    if (dirty) return alert('Save the course decisions first.');
-    const w = youngCloseWarnings(app, cfg);
+    const w = check.warnings;
     if (w.length && !confirm(`Close the young-student flag of ${id} anyway?\n\n- ${w.join('\n- ')}`)) return;
     run(() => repo.closeYoungFlag(id, [note, w.length ? `closed despite: ${w.join(' ')}` : ''].filter(Boolean).join(' — ')), `${id}: young-student flag closed.`);
   };
@@ -74,7 +74,21 @@ function YoungCard({ flag, app, cfg }: { flag: Row; app: Row; cfg: SeasonConfig 
           <tr><td>Study direction</td><td>{field(app, cfg, 'major')}</td></tr>
           <tr><td>Session</td><td>{session?.label}</td></tr>
           <tr><td>Choices</td><td>{choicesText(app)}</td></tr>
-          <tr><td><b>Provisional assignment</b></td><td>{assigned || <span class="muted">not assigned yet (assignment comes in phase 2)</span>}</td></tr>
+          <tr>
+            <td><b>Provisional assignment</b></td>
+            <td>
+              {assigned ? (
+                <b>{assigned}</b>
+              ) : app[APP_COLS.assignNote] ? (
+                <span>
+                  <b>none</b> — on the <a href="#/waitlist">waitlist</a> <span class="muted small">({app[APP_COLS.assignNote]})</span>
+                </span>
+              ) : (
+                <span class="muted">not assigned yet — run <a href="#/assign">Assign courses</a></span>
+              )}
+              {assigned && app[APP_COLS.locked] === 'TRUE' && <span class="badge">locked</span>}
+            </td>
+          </tr>
           <tr><td>Accommodation</td><td>{field(app, cfg, 'accommodation')}</td></tr>
           <tr><td>Flag</td><td>{flag[FLAG_COLS.detail]}</td></tr>
           <tr><td>Other open flags</td><td>{app[APP_COLS.openFlags].replace(/\bYOUNG(, )?/, '') || '—'}</td></tr>
@@ -124,7 +138,17 @@ function YoungCard({ flag, app, cfg }: { flag: Row; app: Row; cfg: SeasonConfig 
             {!closed ? (
               <>
                 <input placeholder="Note when closing (optional)" value={note} onInput={(e) => setNote((e.target as HTMLInputElement).value)} />
-                <button class="primary" onClick={close}>OK — close young-student flag</button>
+                <button
+                  class="primary"
+                  disabled={dirty || check.blockers.length > 0}
+                  title={dirty ? 'Save the course decisions first.' : check.blockers.join(' ')}
+                  onClick={close}
+                >
+                  OK — close young-student flag
+                </button>
+                {(dirty || check.blockers.length > 0) && (
+                  <span class="small muted">{dirty ? 'Save the course decisions first.' : check.blockers.join(' ')}</span>
+                )}
               </>
             ) : (
               <button onClick={() => run(() => repo.setFlagStatus(flag[FLAG_COLS.flagId], 'open', ''), `${id} reopened.`)}>Reopen</button>

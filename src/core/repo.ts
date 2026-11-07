@@ -1,11 +1,16 @@
 import { configFromTables, configToTables } from './config';
 import type { ParsedCsv } from './csv';
-import { derivedChoices, reconcileAutoFlags } from './flags';
+import { derivedChoices, field, reconcileAutoFlags } from './flags';
+import type { MotivationAnswer, SchoolAnswer } from './llm';
+import { collapseWs, fold } from './text';
 import { planImport, type ImportPlan } from './importer';
 import type { TableStore } from './store';
-import { courseDecisionColumns, type CourseDecision } from './young';
-import { diffAssignment, isLocked, lockBlockers, runAssignment, staleUnlocked, type AssignChange, type AssignResult } from './assign';
+import { courseDecisionColumns, youngCloseCheck, type CourseDecision } from './young';
+import { diffAssignment, isActive, isLocked, lockBlockers, runAssignment, staleUnlocked, type AssignChange, type AssignResult } from './assign';
 import { feeColumns, formatAmount, parseAmount } from './fees';
+import { addDays } from './admission';
+import { deadlineFlags } from './deadlines';
+import { idList, planPayments, type PaymentPlan } from './payments';
 
 /** Columns the app computes itself; never edited directly. */
 const MANAGED_COLS: string[] = [
@@ -13,7 +18,7 @@ const MANAGED_COLS: string[] = [
   APP_COLS.openFlags, APP_COLS.fee, APP_COLS.amountDue,
 ];
 import {
-  APP_COLS, FIELD_KEYS, FLAG_COLS, type AuditEntry, type FlagStatus, type NewFlag, type Row, type SeasonConfig,
+  APP_COLS, FIELD_KEYS, FLAG_COLS, PAY_COLS, type AuditEntry, type FlagStatus, type NewFlag, type Row, type SeasonConfig,
 } from './types';
 
 export interface Snapshot {
@@ -237,7 +242,213 @@ export class Repo {
   async setAid(id: string, amount: string, note: string): Promise<void> {
     const n = parseAmount(amount);
     if (Number.isNaN(n) || n < 0) throw new Error(`"${amount}" is not a valid amount.`);
+    const cfg = await this.requireConfig();
+    const app = (await this.store.readAll('Applications')).find((a) => a[APP_COLS.id] === id);
+    if (!app) throw new Error(`No application ${id}`);
+    const fee = parseAmount(feeColumns({ ...app, [APP_COLS.aid]: '' }, cfg)[APP_COLS.fee]);
+    if (n > 0 && !fee) throw new Error(`${id}: the fee is unknown (no accommodation), so aid can't be checked.`);
+    if (n > fee) throw new Error(`Aid of ${formatAmount(n)} EUR is more than the fee of ${formatAmount(fee)} EUR for ${id}. Not saved.`);
     await this.bulkUpdate([{ id, values: { [APP_COLS.aid]: n ? formatAmount(n) : '', [APP_COLS.aidNote]: note } }], 'financial aid');
+  }
+
+  // ---------------------------------------------------------------- payments (phase 3)
+
+  async previewPayments(csv: ParsedCsv): Promise<PaymentPlan> {
+    const cfg = await this.requireConfig();
+    const [apps, existing] = await Promise.all([this.store.readAll('Applications'), this.store.readAll('Payments')]);
+    return planPayments(csv, apps, existing, cfg, this.clock());
+  }
+
+  async commitPayments(plan: PaymentPlan): Promise<void> {
+    if (plan.errors.length) throw new Error('This import has blocking errors.');
+    const existing = new Set((await this.store.readAll('Payments')).map((p) => p[PAY_COLS.paymentId]));
+    if (plan.newRows.some((p) => existing.has(p[PAY_COLS.paymentId]))) throw new Error('The data changed since the preview. Please preview again.');
+    await this.store.append('Payments', plan.newRows);
+    await this.store.append(
+      'AuditLog',
+      plan.newRows.map((p) =>
+        this.entry(p[PAY_COLS.matchedApps], `Payment ${p[PAY_COLS.paymentId]}`, '', `imported: ${p[PAY_COLS.status]}${p[PAY_COLS.matchMethod] ? ` (${p[PAY_COLS.matchMethod]})` : ''}`, 'payment import'),
+      ) as unknown as Row[],
+    );
+  }
+
+  private async payUpdate(paymentId: string, values: Row, action: string): Promise<Row> {
+    const p = (await this.store.readAll('Payments')).find((x) => x[PAY_COLS.paymentId] === paymentId);
+    if (!p) throw new Error(`No payment ${paymentId}`);
+    const real = Object.fromEntries(Object.entries(values).filter(([k, v]) => (p[k] ?? '') !== v));
+    if (Object.keys(real).length === 0) return p;
+    await this.store.update('Payments', PAY_COLS.paymentId, [{ key: paymentId, values: real }]);
+    const appId = values[PAY_COLS.matchedApps] ?? p[PAY_COLS.matchedApps];
+    await this.store.append(
+      'AuditLog',
+      Object.entries(real).map(([k, v]) => this.entry(appId, `Payment ${paymentId} ${k}`, p[k] ?? '', v, action)) as unknown as Row[],
+    );
+    return { ...p, ...real };
+  }
+
+  /** Link a payment to one or more applications (two when one transfer pays for both sessions). */
+  async matchPaymentTo(paymentId: string, appIds: string[], note = ''): Promise<void> {
+    const apps = await this.store.readAll('Applications');
+    for (const id of appIds) if (!apps.some((a) => a[APP_COLS.id] === id)) throw new Error(`No application ${id}`);
+    await this.payUpdate(
+      paymentId,
+      { [PAY_COLS.status]: appIds.length ? 'matched' : 'open', [PAY_COLS.matchedApps]: appIds.join(', '), [PAY_COLS.matchMethod]: appIds.length ? 'manual' : '', [PAY_COLS.note]: note },
+      'payment matching',
+    );
+  }
+
+  /** Set aside a payment row (e.g. a test submission); a duplicate can also be "un-duplicated" by matching it. */
+  async ignorePayment(paymentId: string, note: string): Promise<void> {
+    await this.payUpdate(paymentId, { [PAY_COLS.status]: 'ignored', [PAY_COLS.note]: note }, 'payment ignored');
+  }
+
+  /** Expected amount for a payment: the sum of the amounts due of its applications. */
+  async expectedAmount(paymentId: string): Promise<number> {
+    const [pays, apps] = await Promise.all([this.store.readAll('Payments'), this.store.readAll('Applications')]);
+    const p = pays.find((x) => x[PAY_COLS.paymentId] === paymentId);
+    return idList(p?.[PAY_COLS.matchedApps]).reduce((s, id) => s + parseAmount(apps.find((a) => a[APP_COLS.id] === id)?.[APP_COLS.amountDue]), 0);
+  }
+
+  /** Store the automatic proof check (likely-ok / needs-review). Never overrides a human decision. */
+  async setProofCheck(paymentId: string, verdict: 'likely-ok' | 'needs-review', detail: string): Promise<void> {
+    const p = (await this.store.readAll('Payments')).find((x) => x[PAY_COLS.paymentId] === paymentId);
+    if (!p || p[PAY_COLS.proofStatus] === 'approved' || p[PAY_COLS.proofStatus] === 'rejected') return;
+    await this.payUpdate(paymentId, { [PAY_COLS.proofStatus]: verdict, [PAY_COLS.proofDetail]: detail }, 'proof check');
+  }
+
+  /**
+   * A human approves the payment: its applications are marked paid (PaidAt) and their open payment flags resolved.
+   * Works with or without an automatic proof check (e.g. checked in Outlook).
+   */
+  async approvePayment(paymentId: string, note = ''): Promise<void> {
+    const p = (await this.store.readAll('Payments')).find((x) => x[PAY_COLS.paymentId] === paymentId);
+    if (!p) throw new Error(`No payment ${paymentId}`);
+    const ids = idList(p[PAY_COLS.matchedApps]);
+    if (p[PAY_COLS.status] !== 'matched' || ids.length === 0) throw new Error(`${paymentId} isn't linked to an application yet.`);
+    await this.payUpdate(paymentId, { [PAY_COLS.proofStatus]: 'approved', [PAY_COLS.note]: note || p[PAY_COLS.note] }, 'payment approved');
+    const apps = await this.store.readAll('Applications');
+    const today = this.clock().slice(0, 10);
+    await this.bulkUpdate(
+      ids.map((id) => {
+        const a = apps.find((x) => x[APP_COLS.id] === id)!;
+        const list = [...new Set([...idList(a[APP_COLS.paymentIds]), paymentId])].join(', ');
+        return { id, values: { [APP_COLS.paidAt]: a[APP_COLS.paidAt] || today, [APP_COLS.paymentIds]: list } };
+      }),
+      'paid',
+    );
+    for (const f of await this.store.readAll('Flags'))
+      if (ids.includes(f[FLAG_COLS.appId]) && f[FLAG_COLS.status] === 'open' && (f[FLAG_COLS.type] === 'PAYMENT_OVERDUE' || f[FLAG_COLS.type] === 'FINAL_DEADLINE_PASSED'))
+        await this.setFlagStatus(f[FLAG_COLS.flagId], 'resolved', `paid (${paymentId})`, 'payment');
+  }
+
+  async rejectProof(paymentId: string, note: string): Promise<void> {
+    await this.payUpdate(paymentId, { [PAY_COLS.proofStatus]: 'rejected', [PAY_COLS.note]: note }, 'proof rejected');
+  }
+
+  /** Undo "paid" for an application (e.g. approved by mistake). */
+  async unmarkPaid(appId: string, reason: string): Promise<void> {
+    await this.bulkUpdate([{ id: appId, values: { [APP_COLS.paidAt]: '' } }], `unmark paid: ${reason}`);
+  }
+
+  /** Record that payment reminders were sent; sets the new deadline (today + reminder days). */
+  async recordReminders(appIds: string[], final: boolean): Promise<string> {
+    const cfg = await this.requireConfig();
+    const apps = await this.store.readAll('Applications');
+    const today = this.clock().slice(0, 10);
+    const deadline = addDays(today, cfg.reminderDays);
+    await this.bulkUpdate(
+      appIds.map((id) => {
+        const a = apps.find((x) => x[APP_COLS.id] === id);
+        if (!a) throw new Error(`No application ${id}`);
+        const line = `${today} ${final ? 'FINAL reminder' : 'reminder'}, new deadline ${deadline}`;
+        return {
+          id,
+          values: {
+            [APP_COLS.reminders]: a[APP_COLS.reminders] ? `${a[APP_COLS.reminders]}\n${line}` : line,
+            [APP_COLS.reminderDeadline]: deadline,
+            [APP_COLS.finalReminder]: final ? 'TRUE' : '',
+          },
+        };
+      }),
+      final ? 'final payment reminder' : 'payment reminder',
+    );
+    return deadline;
+  }
+
+  /** Raise flags for passed payment deadlines (idempotent). Returns how many were raised. */
+  async checkPaymentDeadlines(): Promise<number> {
+    const [apps, flags] = await Promise.all([this.store.readAll('Applications'), this.store.readAll('Flags')]);
+    const list = deadlineFlags(apps, flags, this.clock().slice(0, 10));
+    await this.addFlags(list);
+    return list.length;
+  }
+
+  // ---------------------------------------------------------------- phase 4: Flemish schools, motivation check
+
+  /** Store Claude's school verdicts as suggestions (a human confirms them per school). */
+  async importSchoolAnswers(answers: SchoolAnswer[]): Promise<number> {
+    const schools = await this.store.readAll('Schools');
+    const now = this.clock();
+    const add: Row[] = [];
+    const upd: { key: string; values: Row }[] = [];
+    for (const a of answers) {
+      const ex = schools.find((s) => fold(s.School) === fold(a.school));
+      const values = { Suggested: a.verdict, OfficialName: a.officialName ?? '', SuggestionNote: a.note ?? '' };
+      if (ex) upd.push({ key: ex.School, values });
+      else add.push({ School: collapseWs(a.school), Verdict: '', ...values, ConfirmedBy: '', ConfirmedAt: '', AddedAt: now });
+    }
+    await this.store.update('Schools', 'School', upd);
+    await this.store.append('Schools', add);
+    await this.store.append('AuditLog', [this.entry('', 'Schools', '', `${answers.length} LLM school verdict(s) imported`, 'FL school check')] as unknown as Row[]);
+    return answers.length;
+  }
+
+  /**
+   * Confirm a school as Flemish or not (kept for future seasons) and decide the Flemish status of every student
+   * still "claimed" with that school.
+   */
+  async confirmSchool(school: string, verdict: 'Flemish' | 'not Flemish'): Promise<number> {
+    const cfg = await this.requireConfig();
+    const schools = await this.store.readAll('Schools');
+    const ex = schools.find((s) => fold(s.School) === fold(school));
+    const values = { Verdict: verdict, ConfirmedBy: this.user, ConfirmedAt: this.clock() };
+    if (ex) await this.store.update('Schools', 'School', [{ key: ex.School, values }]);
+    else await this.store.append('Schools', [{ School: collapseWs(school), Suggested: '', OfficialName: '', SuggestionNote: '', AddedAt: this.clock(), ...values }]);
+    await this.store.append('AuditLog', [this.entry('', `School "${collapseWs(school)}"`, ex?.Verdict ?? '', verdict, 'FL school check')] as unknown as Row[]);
+    const apps = await this.store.readAll('Applications');
+    const ids = apps.filter((a) => isActive(a) && a[APP_COLS.flStatus] === 'claimed' && fold(field(a, cfg, 'school')) === fold(school)).map((a) => a[APP_COLS.id]);
+    await this.bulkUpdate(ids.map((id) => ({ id, values: { [APP_COLS.flStatus]: verdict === 'Flemish' ? 'confirmed' : 'rejected' } })), `Flemish school check: ${verdict}`);
+    return ids.length;
+  }
+
+  /** Apply confirmed school verdicts (also from earlier seasons) to students still "claimed". */
+  async applyKnownSchools(): Promise<number> {
+    const schools = (await this.store.readAll('Schools')).filter((s) => s.Verdict === 'Flemish' || s.Verdict === 'not Flemish');
+    let n = 0;
+    for (const s of schools) n += await this.confirmSchool(s.School, s.Verdict as 'Flemish' | 'not Flemish');
+    return n;
+  }
+
+  /** Store Claude's motivation verdicts; flagged ones get a MOTIVATION_LLM flag for human review. */
+  async importMotivationAnswers(answers: MotivationAnswer[]): Promise<{ flagged: number; unknown: string[] }> {
+    const apps = await this.store.readAll('Applications');
+    const known = new Set(apps.map((a) => a[APP_COLS.id]));
+    const unknown = answers.filter((a) => !known.has(a.id)).map((a) => a.id);
+    const ok = answers.filter((a) => known.has(a.id));
+    await this.bulkUpdate(ok.map((a) => ({ id: a.id, values: { [APP_COLS.motivationCheck]: a.flag ? `FLAG: ${a.reason}` : 'no flag' } })), 'motivation check (LLM)');
+    const flags = await this.store.readAll('Flags');
+    const toFlag = ok.filter((a) => a.flag && !flags.some((f) => f[FLAG_COLS.appId] === a.id && f[FLAG_COLS.type] === 'MOTIVATION_LLM' && f[FLAG_COLS.status] === 'open'));
+    await this.addFlags(toFlag.map((a) => ({ appId: a.id, type: 'MOTIVATION_LLM', detail: `Motivation (LLM check): ${a.reason || 'flagged'}` })));
+    return { flagged: toFlag.length, unknown };
+  }
+
+  // ---------------------------------------------------------------- new season
+
+  /** Mark this season archived (the app then opens it read-only) and protect its tabs against accidental edits. */
+  async archiveSeason(): Promise<void> {
+    const cfg = await this.requireConfig();
+    await this.saveConfig({ ...cfg, archived: true });
+    await this.store.protect?.();
   }
 
   /** After the user confirmed the admission e-mails were sent. */
@@ -285,6 +496,8 @@ export class Repo {
     );
     if (!flag) throw new Error(`${id} has no open YOUNG flag.`);
     const app = (await this.store.readAll('Applications')).find((a) => a[APP_COLS.id] === id)!;
+    const { blockers } = youngCloseCheck(app, await this.requireConfig());
+    if (blockers.length) throw new Error(`Can't close the young-student flag of ${id}: ${blockers.join(' ')}`);
     await this.updateApplication(id, { [APP_COLS.youngApprovedWith]: app[APP_COLS.assignedCourse] ?? '' }, 'young review');
     await this.setFlagStatus(flag[FLAG_COLS.flagId], 'approved', note || 'OK');
   }

@@ -46,10 +46,17 @@ export interface SeasonConfig {
     minMotivationWords: number;
   };
   paymentDeadlineDays: number;
+  /** Days a payment reminder gives (new deadline = reminder date + this). */
+  reminderDays: number;
+  /** KU Leuven structured payment reference, e.g. "+++400/0029/31560+++". */
+  paymentReference: string;
+  paymentIban: string;
   /** Internal field key → CSV header text (whitespace-normalised). */
   columnMap: Record<FieldKey, string>;
   /** Text of the "I am a" answer that claims Flemish status. */
   flemishStatusValue: string;
+  /** Archived (previous) season: the app opens it read-only. */
+  archived: boolean;
 }
 
 /** Form fields the app knows about. The column map ties each to the current season's header text. */
@@ -103,6 +110,18 @@ export const APP_COLS = {
   amountDue: 'AmountDue',
   admittedAt: 'AdmittedAt',
   paymentDeadline: 'PaymentDeadline',
+  /** Date the payment was confirmed (proof approved or marked paid by hand). */
+  paidAt: 'PaidAt',
+  /** Payment rows (PaymentID) that paid for this application. */
+  paymentIds: 'PaymentIDs',
+  /** Log of payment reminders, one "yyyy-mm-dd reminder|FINAL reminder, new deadline yyyy-mm-dd" line each. */
+  reminders: 'Reminders',
+  /** Deadline set by the latest reminder (overrides PaymentDeadline). */
+  reminderDeadline: 'ReminderDeadline',
+  /** "TRUE" when the latest reminder was the final one. */
+  finalReminder: 'FinalReminder',
+  /** Phase 4 LLM motivation check result ("no flag" or the reason). */
+  motivationCheck: 'MotivationCheck',
   notes: 'Notes',
   withdrawnReason: 'WithdrawnReason',
 } as const;
@@ -112,7 +131,7 @@ export type FLStatus = 'claimed' | 'confirmed' | 'rejected' | 'n.a.';
 
 export const FLAG_TYPES = [
   'NO_COURSE_CHOSEN', 'UNKNOWN_COURSE', 'UNKNOWN_SESSION', 'BAD_BIRTH_DATE', 'YOUNG', 'TOO_OLD', 'SHORT_MOTIVATION',
-  'NEAR_DUPLICATE',
+  'NEAR_DUPLICATE', 'PAYMENT_OVERDUE', 'FINAL_DEADLINE_PASSED', 'MOTIVATION_LLM', 'FL_SCHOOL',
 ] as const;
 export type FlagType = (typeof FLAG_TYPES)[number];
 
@@ -155,3 +174,28 @@ export interface AuditEntry {
   NewValue: string;
   Action: string;
 }
+
+/** Columns of the Payments tab (one row per payment-form submission). */
+export const PAY_COLS = {
+  paymentId: 'PaymentID',
+  importKey: 'ImportKey',
+  importedAt: 'ImportedAt',
+  rowNo: 'RowNo',
+  payerName: 'PayerName',
+  payerEmail: 'PayerEmail',
+  proofFile: 'ProofFile',
+  terms: 'TermsAccepted',
+  sessionAnswer: 'SessionAnswer',
+  /** open (needs matching) / matched / duplicate / ignored */
+  status: 'Status',
+  /** Application ID(s) this payment is for (comma-separated; two when one transfer covers both sessions). */
+  matchedApps: 'MatchedApps',
+  matchMethod: 'MatchMethod',
+  /** Suggestions for a human: "SOS26-0030 (0.90); …" */
+  candidates: 'Candidates',
+  duplicateOf: 'DuplicateOf',
+  /** '' / likely-ok / needs-review / approved / rejected */
+  proofStatus: 'ProofStatus',
+  proofDetail: 'ProofDetail',
+  note: 'Note',
+} as const;

@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { isActive, isLocked, lockBlockers, priorityCompare } from '../../core/assign';
 import { countsAsFlemish } from '../../core/fees';
+import { field } from '../../core/flags';
 import { APP_COLS } from '../../core/types';
 import { fmtTime, fullName, useApp } from '../ctx';
 
@@ -30,7 +31,8 @@ export function Locking() {
       <h1>Locking</h1>
       <p>
         Lock a student once their assignment has been communicated: re-runs never change a locked student. Students can't be
-        locked while unassigned, waiting for a dorm place, or with an open young-student flag.
+        locked while unassigned, waiting for a dorm place, with an open young-student flag, or while their Flemish-school claim
+        isn't confirmed or rejected yet (decide it here, or in bulk on the <a href="#/schools">Flemish schools</a> screen).
       </p>
 
       <div class="panel">
@@ -87,7 +89,16 @@ export function Locking() {
                 <td>{a[APP_COLS.assignedCourse]}</td>
                 <td>{countsAsFlemish(a) ? 'FL' : ''}</td>
                 <td class="nowrap">{fmtTime(a[APP_COLS.postingUTC])}</td>
-                <td class="small">{why.join('; ')}</td>
+                <td class="small">
+                  {why.join('; ')}
+                  {a[APP_COLS.flStatus] === 'claimed' && (
+                    <div class="row">
+                      <span class="muted">{field(a, cfg, 'school')}</span>
+                      <button onClick={() => run(() => repo.updateApplication(id, { [APP_COLS.flStatus]: 'confirmed' }, 'Flemish school check'), `${id}: Flemish school confirmed.`)}>Flemish ✓</button>
+                      <button onClick={() => run(() => repo.updateApplication(id, { [APP_COLS.flStatus]: 'rejected' }, 'Flemish school check'), `${id}: not a Flemish school (fee: other).`)}>Not Flemish</button>
+                    </div>
+                  )}
+                </td>
               </tr>
             );
           })}

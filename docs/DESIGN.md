@@ -81,7 +81,8 @@ Automate the Summer of Science application workflow (intake → checks → cours
 - **Financial aid:** search a student, add/change an amount (also after admission); fee updates immediately; overview list with total aid given. (A separate financial-aid application form exists — possible future import.)
 - **Admission e-mail export:** Excel for mail merge of all locked, not-yet-admitted students, including the **parent e-mail** (admission/payment e-mails always go to the parent too). Students are marked "admitted" (with date) only after the user confirms "I've sent these".
 
-### Phase 2 decisions (Daniel, 7 Nov 2026)
+### Phase 2 decisions (Daniel, 7 Nov 2026; feedback 8 Nov)
+- **8 Nov feedback:** financial aid can't exceed the fee (refused); a student can't be locked while their Flemish-school claim is still "claimed" (confirm/reject on the Locking or Flemish schools screen); closing a YOUNG flag *requires* at least one course marked OK and the student assigned to an OK course (dorm OK stays a confirmable warning for FULL students); Assign courses shows a clickable roster per course with lock status.
 - **Capacity:** the algorithm fills each course up to its **current limit**, which starts at the soft max. A course that is full while students are waiting for it is flagged in the preview; the user can raise the limit (never above the hard max) and re-run.
 - **Course order per student:** their own choices in preference order, skipping courses marked **NOT OK**; after that, courses marked **OK** that weren't among their choices. An OK mark doesn't restrict the student to OK courses.
 - **Prerequisites (structured):** per course, a minimum age on the session start date, or an explicit "no prerequisites" tick; assignment refuses to run while a course has neither. A course whose prerequisite the student doesn't meet is skipped, unless that course is marked OK for the student. Free-text prerequisite notes are informational.
@@ -107,11 +108,20 @@ Automate the Summer of Science application workflow (intake → checks → cours
 - The payment reference is fixed by KU Leuven (+++400/0029/31560+++) and cannot be personalised; finance extracts are too late and the payer names unreliable → not used.
 - Payment deadline per student (default: admission + 14 days) → flag when passed. Reminders: generate a mail-merge Excel or mark individual reminders as sent; multiple reminders allowed; a reminder can be marked "final", after whose deadline the student is flagged for a decision (e.g. unassign).
 
+### Phase 3 as built (8 Nov 2026)
+- `Payments` tab: one row per payment-form submission (`PaymentID`, payer name/e-mail, proof file name, status open/matched/duplicate/ignored, `MatchedApps`, `MatchMethod`, `Candidates`, `ProofStatus`, `ProofDetail`, `Note`). The CSV has no timestamp: a row is recognised by its content + occurrence number; an identical repeat is marked duplicate.
+- Matching: e-mail = student or parent e-mail (several applications with that e-mail → the session answer, if the form has it, or a clear name match decides; else a human); otherwise a unique student/parent name with the same words (accents, case, order ignored) → matched; otherwise top-3 suggestions (fuzzy names) for a human. A shared name (siblings, unmerged resubmission) is never guessed. No LLM needed so far.
+- Proof check: files dropped into the browser (memory only), paired by file name only when unambiguous; text from PDFs (pdf.js; scanned PDFs are OCR'd) or images (Tesseract.js, engine + language data served by the app itself). "Likely OK" = expected amount (sum of amounts due of the linked applications) + reference or IBAN found. A human approves → `PaidAt` + `PaymentIDs` on the application(s); open payment flags resolved.
+- Deadlines: current deadline = latest reminder's deadline, else admission + 14 days. "Raise flags" creates `PAYMENT_OVERDUE`, or `FINAL_DEADLINE_PASSED` after a final reminder (once per deadline). Reminders: mail-merge Excel + "I've sent these" (new deadline = today + `reminderDays`, default 7).
+
 ## 6. LLM steps (phase 4)
 
 - **FL school check:** only for students claiming "Student at a Flemish (Dutch-speaking) school". Send a *deduplicated list of school-name strings only* (no IDs, no students). The LLM answers per school: Flemish yes / no / unclear. Definition: a Dutch-language school recognised by the Flemish Community, including Dutch-language schools in Brussels. French-speaking Belgian schools are simply "not Flemish" (no special status). "Unclear" → the human decides. Confirmed answers go into `Schools` for reuse.
 - **Motivation check:** word count is an automatic (non-LLM) flag. The LLM gets ID + motivation text, with the student's first name, surname, e-mail, phone and school replaced by placeholders (case- and accent-insensitive). It flags motivations that are very short without reason, suggest the student is not a viable candidate (e.g. actually a university student, much too young), or are otherwise questionable — with one short sentence per flag. Results are written back as flags.
-- Delivery mechanism to decide: (a) "export packet / import results" JSON files that Daniel passes to Claude, or (b) a direct API call with Daniel's own key kept only in his browser. (a) is the default.
+- Delivery mechanism: (a) "export packet / import results" JSON files that Daniel passes to Claude — **built (8 Nov 2026)**; (b) a direct API call is not built.
+- As built: the FL packet holds only distinct school names; Claude's verdicts are *suggestions* in the `Schools` tab; Daniel confirms per school, which decides all claimed students with that school and is kept for future seasons. The motivation packet holds ID, session, years left, age and the redacted motivation (student + parent names, e-mails, phones, school → placeholders; any e-mail address or 9+-digit number too); flagged answers become `MOTIVATION_LLM` flags. A prerequisite packet (course notes → proposed minimum age) lets Daniel apply rules per course.
+- Rosters & lists (Excel, made in the browser): course rosters (contact details optional), medical/dietary list (only filled-in rows, minimal columns), no-photo-permission list, dorm list with hall requests.
+- New season: creates the next Sheet with carried-over settings (dates/labels moved one year, limits reset, confirmed schools copied), archives the current one (`archived` in Config → opened read-only; tabs get warning-only protection). Seasons opened in the browser are listed on the start screen.
 
 ## 7. Other
 
@@ -152,7 +162,11 @@ Automate the Summer of Science application workflow (intake → checks → cours
   - Either way: every colleague must be added as a test user (Google Cloud → Audience) while the app stays in testing mode (max. 100 users). The "Copy app link to this Sheet" link already exists for handing out the Sheet.
 - **Data protection:** DPO review before going live with real data, and the retention period for archived seasons (§2).
 - **Google account** that owns the master Sheet long-term: Daniel's own or a KU Leuven-linked account (§2).
-- **To confirm:** closing a young-student flag requires "Student dorm OK" only for FULL students (EVENING/DAY students don't sleep in the dorms).
+- **To confirm:** closing a young-student flag warns about "Student dorm OK" only for FULL students (EVENING/DAY students don't sleep in the dorms).
+- **To confirm:** proof "likely OK" = amount + (reference OR IBAN). Stricter (all three) is a one-line change.
+- **To confirm:** payments are matched automatically by e-mail and by a *unique* exact name (student or parent). Should name-only matches rather always be confirmed by hand?
+- **To decide:** how the proof files get from Outlook into a folder (Power Automate flow, `REMINDERS.md` item 3); the app matches them by file name.
+- **Not built:** the direct-API variant of the LLM steps; LLM help for payment leftovers (the fuzzy suggestions seem enough — revisit with real data).
 - **Real export details still unverified:** unticked checkbox value (empty vs `FALSE`); whether the fraction of a second in Posting Date/Time is always 6 digits (§8). Blank rows, BOM and unpadded time parts are handled.
 - **LLM delivery mechanism** for phase 4: export/import JSON files (default) or a direct API call with Daniel's own key (§6).
 - **New-season form changes** (payment form e-mail label + session radio button, proof-of-payment folder): see `REMINDERS.md`.

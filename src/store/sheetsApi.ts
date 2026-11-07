@@ -19,6 +19,8 @@ export interface SheetsApi {
   clear(range: string): Promise<void>;
   addSheets(titles: string[]): Promise<void>;
   appendColumns(sheetId: number, count: number): Promise<void>;
+  /** Warning-only protection on whole tabs (editing shows a "are you sure" warning in Google Sheets). */
+  protectSheets(sheetIds: number[], description: string): Promise<void>;
 }
 
 const BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
@@ -118,6 +120,13 @@ export class HttpSheetsApi implements SheetsApi {
     await this.call(':batchUpdate', {
       method: 'POST',
       body: JSON.stringify({ requests: titles.map((title) => ({ addSheet: { properties: { title, gridProperties: { frozenRowCount: 1 } } } })) }),
+    });
+  }
+
+  async protectSheets(sheetIds: number[], description: string): Promise<void> {
+    await this.call(':batchUpdate', {
+      method: 'POST',
+      body: JSON.stringify({ requests: sheetIds.map((sheetId) => ({ addProtectedRange: { protectedRange: { range: { sheetId }, description, warningOnly: true } } })) }),
     });
   }
 

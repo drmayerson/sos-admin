@@ -112,10 +112,15 @@ describe('locking, pinning, dorms, fees, admission', () => {
     const young = s.flags.find((f) => f[FLAG_COLS.type] === 'YOUNG')![FLAG_COLS.appId];
     const waiting = s.apps.find((a) => a[APP_COLS.dormWaiting] === 'TRUE')![APP_COLS.id];
     const unassigned = s.apps.find((a) => !a[APP_COLS.assignedCourse])![APP_COLS.id];
-    const fine = s.apps.find((a) => a[APP_COLS.assignedCourse] && a[APP_COLS.dormWaiting] !== 'TRUE' && !a[APP_COLS.openFlags].includes('YOUNG'))![APP_COLS.id];
-    const skipped = await repo.lock([young, waiting, unassigned, fine]);
-    expect(skipped.map((x) => x.id).sort()).toEqual([young, waiting, unassigned].filter((x) => x !== fine).sort());
+    const ok = (a: Row) => a[APP_COLS.assignedCourse] && a[APP_COLS.dormWaiting] !== 'TRUE' && !a[APP_COLS.openFlags].includes('YOUNG');
+    const fine = s.apps.find((a) => ok(a) && a[APP_COLS.flStatus] !== 'claimed')![APP_COLS.id];
+    const claimed = s.apps.find((a) => ok(a) && a[APP_COLS.flStatus] === 'claimed')![APP_COLS.id];
+    const skipped = await repo.lock([young, waiting, unassigned, fine, claimed]);
+    expect(skipped.map((x) => x.id).sort()).toEqual([young, waiting, unassigned, claimed].sort());
+    expect(skipped.find((x) => x.id === claimed)!.why).toEqual(['Flemish school not yet confirmed or rejected']);
     expect(byId(await apps(repo), fine)[APP_COLS.locked]).toBe('TRUE');
+    await repo.updateApplication(claimed, { [APP_COLS.flStatus]: 'confirmed' });
+    expect(await repo.lock([claimed])).toEqual([]);
   });
 
   it('pinned students keep their manual course in re-runs', async () => {
@@ -145,7 +150,8 @@ describe('locking, pinning, dorms, fees, admission', () => {
     await repo.setAid(a[APP_COLS.id], '100,00', 'family situation');
     let b = byId(await apps(repo), a[APP_COLS.id]);
     expect([b[APP_COLS.aid], b[APP_COLS.amountDue]]).toEqual(['100', '280']);
-    await repo.setAid(a[APP_COLS.id], '500', '');
+    await expect(repo.setAid(a[APP_COLS.id], '500', '')).rejects.toThrow(/more than the fee of 380/);
+    await repo.setAid(a[APP_COLS.id], '380', 'full waiver');
     b = byId(await apps(repo), a[APP_COLS.id]);
     expect(b[APP_COLS.amountDue]).toBe('0');
     await expect(repo.setAid(a[APP_COLS.id], 'abc', '')).rejects.toThrow(/valid amount/);
@@ -159,6 +165,8 @@ describe('locking, pinning, dorms, fees, admission', () => {
     const e33 = expected().find((e) => e.case === 'E33')!.expectedId!;
     const lockable = (await apps(repo)).filter((a) => a[APP_COLS.assignedCourse] && a[APP_COLS.dormWaiting] !== 'TRUE' && !a[APP_COLS.openFlags].includes('YOUNG'));
     const ids = [...new Set([e33, ...lockable.slice(0, 5).map((a) => a[APP_COLS.id])])];
+    // Lock needs a decided Flemish status: confirm all but one claimed student, and pretend one is still claimed later.
+    for (const id of ids) if (byId(await apps(repo), id)[APP_COLS.flStatus] === 'claimed') await repo.updateApplication(id, { [APP_COLS.flStatus]: 'confirmed' });
     await repo.lock(ids);
     const list = await apps(repo);
     const ex = admissionExport(list, c, '2026-05-01');
@@ -168,7 +176,7 @@ describe('locking, pinning, dorms, fees, admission', () => {
     if (locked.includes(e33)) expect(ex.rows.find((r) => r.ID === e33)!.CcParentEmail).toBe('');
     const other = ex.rows.find((r) => r.ID !== e33)!;
     expect(other.CcParentEmail).toBe(other.ParentEmail);
-    expect(ex.warnings.some((w) => w.includes('claimed'))).toBe(true);
+    expect(ex.warnings).toEqual([]); // everyone locked has a decided Flemish status now
     await repo.markAdmitted(ex.rows.map((r) => r.ID), '2026-05-01', ex.paymentDeadline);
     expect(admissionExport(await apps(repo), c, '2026-05-02').rows).toHaveLength(0);
   });
@@ -181,6 +189,7 @@ describe('locking, pinning, dorms, fees, admission', () => {
     const f = s.flags.find((x) => x[FLAG_COLS.type] === 'YOUNG' && byId(s.apps, x[FLAG_COLS.appId])[APP_COLS.assignedCourse])!;
     const id = f[FLAG_COLS.appId];
     const course = byId(s.apps, id)[APP_COLS.assignedCourse];
+    await repo.setCourseDecisions(id, { [course]: 'OK' });
     await repo.closeYoungFlag(id, 'ok');
     await repo.setCourseDecisions(id, { [course]: 'NOT OK' });
     await repo.applyAssignment((await repo.previewAssignment()).changes);

@@ -1,3 +1,4 @@
+import { awaitingPayment, isOverdue } from '../../core/deadlines';
 import { APP_COLS, FLAG_COLS } from '../../core/types';
 import { useApp } from '../ctx';
 
@@ -7,6 +8,7 @@ export function Home() {
   const open = snap.flags.filter((f) => f[FLAG_COLS.status] === 'open');
   const openOf = (t: string) => open.filter((f) => f[FLAG_COLS.type] === t).length;
   const bySession = (k: string) => active.filter((a) => a[APP_COLS.session] === k).length;
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div>
@@ -19,7 +21,7 @@ export function Home() {
       <div class="cards">
         <Card n={active.length} label="active applications" href="#/apps" />
         {snap.cfg?.sessions.map((s) => <Card n={bySession(s.key)} label={s.label} href="#/apps" />)}
-        <Card n={active.filter((a) => a[APP_COLS.flStatus] === 'claimed').length} label="claim Flemish status (school check: phase 4)" />
+        <Card n={active.filter((a) => a[APP_COLS.flStatus] === 'claimed').length} label="Flemish school still to confirm" href="#/schools" alert={active.some((a) => a[APP_COLS.flStatus] === 'claimed')} />
         <Card n={open.length} label="open flags" href="#/flags" alert={open.length > 0} />
         <Card n={openOf('NEAR_DUPLICATE')} label="near-duplicates to review" href="#/merge" alert={openOf('NEAR_DUPLICATE') > 0} />
         <Card n={openOf('YOUNG')} label="young students to decide" href="#/young" alert={openOf('YOUNG') > 0} />
@@ -33,15 +35,21 @@ export function Home() {
         <Card n={active.filter((a) => a[APP_COLS.locked] === 'TRUE' && !a[APP_COLS.admittedAt]).length} label="locked, admission e-mail not sent" href="#/admit" alert={active.some((a) => a[APP_COLS.locked] === 'TRUE' && !a[APP_COLS.admittedAt])} />
         <Card n={active.filter((a) => a[APP_COLS.admittedAt]).length} label="admitted" href="#/admit" />
       </div>
+      <h2>Payments</h2>
+      <div class="cards">
+        <Card n={active.filter(awaitingPayment).length} label="admitted, not paid yet" href="#/unpaid" />
+        <Card n={active.filter((a) => isOverdue(a, today)).length} label="payment overdue" href="#/unpaid" alert={active.some((a) => isOverdue(a, today))} />
+        <Card n={active.filter((a) => a[APP_COLS.paidAt]).length} label="paid" href="#/unpaid" />
+      </div>
       <h2>Next steps</h2>
       <ol>
         <li><a href="#/setup">Season setup</a>: sessions, courses, capacities, fees, thresholds, column mapping.</li>
         <li><a href="#/import">Import CSV</a>: upload the full application export (always all applications); only new rows are added.</li>
         <li>Review <a href="#/merge">near-duplicates</a>, <a href="#/young">young students</a> and other <a href="#/flags">flags</a>.</li>
         <li><a href="#/assign">Assign courses</a> (preview, then apply); handle the <a href="#/waitlist">waitlist</a> and <a href="#/dorms">dorm full</a> list.</li>
-        <li><a href="#/lock">Lock</a> students, then send the <a href="#/admit">admission e-mails</a>.</li>
+        <li>Confirm <a href="#/schools">Flemish schools</a>, <a href="#/lock">lock</a> students, then send the <a href="#/admit">admission e-mails</a>.</li>
+        <li><a href="#/payimport">Import payments</a>, <a href="#/paymatch">match</a> the rest, <a href="#/proofs">check the proofs</a>, follow up <a href="#/unpaid">unpaid</a> students.</li>
       </ol>
-      <p class="muted">Payments follow in phase 3.</p>
     </div>
   );
 }

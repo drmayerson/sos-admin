@@ -1,6 +1,7 @@
 import { configFromJson, type ConfigJson } from '../core/config';
 import { Repo } from '../core/repo';
-import { TABLES } from '../core/store';
+import { ReadOnlyStore, TABLES } from '../core/store';
+import type { Row, SeasonConfig } from '../core/types';
 import cfgJson from '../../test-data/config_2026_synthetic.json';
 import { GoogleAuth } from './googleAuth';
 import { HttpSheetsApi } from './sheetsApi';
@@ -12,6 +13,8 @@ export interface Remembered {
   sheetId: string;
   sheetTitle: string;
   user: string;
+  /** All master Sheets opened in this browser (season switcher). */
+  seasons: { id: string; title: string }[];
 }
 const KEY = 'sos-admin.connection';
 
@@ -24,7 +27,7 @@ export function remembered(): Remembered {
   } catch {
     /* storage unavailable */
   }
-  return { sheetId: r.sheetId ?? '', sheetTitle: r.sheetTitle ?? '', user: r.user ?? '' };
+  return { sheetId: r.sheetId ?? '', sheetTitle: r.sheetTitle ?? '', user: r.user ?? '', seasons: Array.isArray(r.seasons) ? r.seasons : [] };
 }
 
 function remember(patch: Partial<Remembered>) {
@@ -75,15 +78,18 @@ export async function openSheet(id: string): Promise<Repo> {
   const title = await api.getTitle();
   const store = new SheetsStore(api, title);
   await store.init();
-  remember({ sheetId: id, sheetTitle: title });
-  return new Repo(store, auth.email || 'unknown');
+  const seasons = [{ id, title }, ...remembered().seasons.filter((x) => x.id !== id)].slice(0, 12);
+  remember({ sheetId: id, sheetTitle: title, seasons });
+  // Archived seasons open read-only.
+  const archived = (await store.readAll('Config')).some((r) => r.Key === 'archived' && r.Value === 'TRUE');
+  return new Repo(archived ? new ReadOnlyStore(store) : store, auth.email || 'unknown');
 }
 
 /**
  * Create a new master Sheet for a season. Season settings start from the 2026 template (courses, dates,
  * fees; capacities are placeholders) and must be checked in Season setup.
  */
-export async function createSheet(season: string): Promise<{ id: string; repo: Repo }> {
+export async function createSheet(season: string, base?: SeasonConfig, schools: Row[] = []): Promise<{ id: string; repo: Repo }> {
   const wide = new Set(['Applications', 'RawImports']);
   const id = await HttpSheetsApi.create(
     await auth.getToken(),
@@ -91,9 +97,12 @@ export async function createSheet(season: string): Promise<{ id: string; repo: R
     TABLES.map((t) => ({ title: t, columns: wide.has(t) ? 120 : 26 })),
   );
   const repo = await openSheet(id);
-  const cfg = configFromJson(cfgJson as ConfigJson);
+  const cfg = base ?? configFromJson(cfgJson as ConfigJson);
   cfg.season = season;
   cfg.idPrefix = `SOS${season.slice(-2)}`;
+  cfg.archived = false;
   await repo.saveConfig(cfg);
+  // The confirmed Flemish-school list grows every year: carry it over.
+  if (schools.length) await repo.store.append('Schools', schools);
   return { id, repo };
 }

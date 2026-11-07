@@ -1,4 +1,4 @@
-import { field } from './flags';
+import { effectiveAccommodation } from './fees';
 import { APP_COLS, type Row, type SeasonConfig } from './types';
 
 export type CourseDecision = 'OK' | 'NOT OK' | '';
@@ -23,15 +23,18 @@ export function courseDecisionColumns(decisions: Record<string, CourseDecision>,
 }
 
 /**
- * Reasons why closing a student's YOUNG flag may be premature: the assigned course must be marked OK and,
- * for FULL (dorm) students, "Student dorm OK" must be ticked. Empty list = fine to close.
+ * Checks before closing a student's YOUNG flag with "OK".
+ * - blockers (closing is refused): no course assigned, or the assigned course isn't marked OK;
+ * - warnings (closing allowed after confirmation): "Student dorm OK" not ticked for a FULL student.
  */
-export function youngCloseWarnings(app: Row, cfg: SeasonConfig): string[] {
-  const w: string[] = [];
+export function youngCloseCheck(app: Row, cfg: SeasonConfig): { blockers: string[]; warnings: string[] } {
+  const blockers: string[] = [];
+  const warnings: string[] = [];
   const assigned = (app[APP_COLS.assignedCourse] ?? '').trim();
   const d = courseDecisions(app);
-  if (!assigned) w.push('No course is assigned yet.');
-  else if (d[assigned] !== 'OK') w.push(`The assigned course ${assigned} is not marked OK.`);
-  if (field(app, cfg, 'accommodation').trim() === 'FULL' && app[APP_COLS.dormOK] !== 'TRUE') w.push('"Student dorm OK" is not ticked (FULL student).');
-  return w;
+  if (!Object.values(d).includes('OK')) blockers.push('No course is marked OK yet.');
+  if (!assigned) blockers.push('The student has no course assigned.');
+  else if (d[assigned] !== 'OK') blockers.push(`The assigned course ${assigned} is not marked OK.`);
+  if (effectiveAccommodation(app, cfg) === 'FULL' && app[APP_COLS.dormOK] !== 'TRUE') warnings.push('"Student dorm OK" is not ticked (FULL student).');
+  return { blockers, warnings };
 }
