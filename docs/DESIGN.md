@@ -93,7 +93,10 @@ Automate the Summer of Science application workflow (intake → checks → cours
 - **Young flag reopens** automatically when a re-run assigns the student a course other than the one it was closed with.
 - **Admission export:** one row per student: student and parent contact (parent e-mail repeated in a CC column only if it differs from the student's), session, course, accommodation, fee, aid, amount due, payment deadline (export date + deadline days). After "I've sent these", `AdmittedAt` and `PaymentDeadline` are written.
 - **Sheet writes** use RAW input (no formulas are ever interpreted from applicant text) and locate rows by ID freshly before every write, so sorting the Sheet by hand is safe.
-- **Google access:** OAuth token flow with the `drive.file` scope (the app only sees the Sheet it created) plus `email` for the audit-log user name. The access token lives only in memory; only the Sheet's ID is remembered in the browser.
+- **Google access:** OAuth token flow with the `drive.file` scope (the app only sees the Sheet it created) plus `email` for the audit-log user name. The access token lives only in memory (never in browser storage).
+- **Return visits (one click):** the browser remembers the Sheet's ID and title and the user's own e-mail (as sign-in hint). The start screen then shows one button "Continue as …"; Google's pop-up flashes and closes without account chooser or consent screen. A fully click-free reload isn't possible without a backend (Google requires a click to open its sign-in window) or without storing the token in the browser, which we don't do.
+- **App link:** "Copy app link to this Sheet" gives `…/sos-admin/?sheet=<ID>`; opening it preselects that Sheet (the ID is then remembered and removed from the address bar). The link holds no personal data.
+- **Colleagues (open):** with `drive.file`, a Sheet created by Daniel can't be opened by a colleague's app session even if shared in Drive. Options: (a) Google Picker — the colleague picks the Sheet once (needs the Picker API + a browser API key); (b) the broader `spreadsheets` scope. Colleagues must also be test users of the Google Cloud app while it stays in testing mode.
 
 ## 5. Stage 3 — payment
 

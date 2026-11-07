@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { Repo, Snapshot } from '../core/repo';
-import { auth, sheetUrl } from '../store/connect';
+import { appLinkFor, auth, sheetUrl } from '../store/connect';
 import { AppCtx, type Ctx } from './ctx';
 import { Admissions } from './screens/Admissions';
 import { ApplicationDetail, Applications } from './screens/Applications';
@@ -140,7 +140,20 @@ function Main({ repo, sheetId, onDisconnect }: { repo: Repo; sheetId: string; on
           <div class="store">
             {sheetId ? (
               <>
+                <div class="small sheet-title">{repo.store.label}</div>
                 <a href={sheetUrl(sheetId)} target="_blank" rel="noopener noreferrer">Open the Google Sheet ↗</a>
+                <button
+                  class="link"
+                  title="A link to this app that opens this Sheet directly (contains only the Sheet's ID)"
+                  onClick={() =>
+                    navigator.clipboard
+                      .writeText(appLinkFor(sheetId))
+                      .then(() => setMsg({ kind: 'ok', text: 'Link copied. It opens this app with this Sheet preselected; it contains only the Sheet ID.' }))
+                      .catch(() => setMsg({ kind: 'ok', text: `Link: ${appLinkFor(sheetId)}` }))
+                  }
+                >
+                  Copy app link to this Sheet
+                </button>
                 <button class="link" onClick={() => reload(true).then(() => setMsg({ kind: 'ok', text: 'Reloaded from the Sheet.' }))}>Reload from Sheet</button>
                 <div class="small">{repo.user}</div>
               </>

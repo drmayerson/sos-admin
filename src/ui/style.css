@@ -111,3 +111,5 @@ nav .store a, nav .store button.link { display: block; padding: 3px 0; color: #c
 .badge.warnb { background: #fde7c4; }
 tr.row-warn td { background: #fff4e5; }
 .connect { max-width: 720px; margin: 40px auto; padding: 0 16px; }
+button.big { font-size: 1.05rem; padding: 8px 18px; }
+nav .sheet-title { color: #fff; margin-bottom: 2px; }

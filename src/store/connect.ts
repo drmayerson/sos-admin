@@ -6,23 +6,39 @@ import { GoogleAuth } from './googleAuth';
 import { HttpSheetsApi } from './sheetsApi';
 import { SheetsStore } from './sheetsStore';
 
-// Only the Sheet's ID is remembered in the browser (no personal data).
-const KEY = 'sos-admin.sheetId';
-export const rememberedSheetId = (): string => {
+// Remembered in this browser, to make returning visits one click: the Sheet's ID and title, and the
+// signed-in user's own e-mail (used as a sign-in hint). No applicant data, no tokens.
+export interface Remembered {
+  sheetId: string;
+  sheetTitle: string;
+  user: string;
+}
+const KEY = 'sos-admin.connection';
+
+export function remembered(): Remembered {
+  let r: Partial<Remembered> = {};
   try {
-    return localStorage.getItem(KEY) ?? '';
+    r = JSON.parse(localStorage.getItem(KEY) ?? '{}');
+    // Older versions stored only the ID under another key.
+    if (!r.sheetId) r.sheetId = localStorage.getItem('sos-admin.sheetId') ?? '';
   } catch {
-    return '';
+    /* storage unavailable */
   }
-};
-const remember = (id: string) => {
+  return { sheetId: r.sheetId ?? '', sheetTitle: r.sheetTitle ?? '', user: r.user ?? '' };
+}
+
+function remember(patch: Partial<Remembered>) {
   try {
-    if (id) localStorage.setItem(KEY, id);
-    else localStorage.removeItem(KEY);
+    localStorage.setItem(KEY, JSON.stringify({ ...remembered(), ...patch }));
+    localStorage.removeItem('sos-admin.sheetId');
   } catch {
     /* storage unavailable: just don't remember */
   }
-};
+}
+
+export function forgetSheet(): void {
+  remember({ sheetId: '', sheetTitle: '' });
+}
 
 /** Accepts a bare ID or a full docs.google.com/spreadsheets/d/<id>/… URL. */
 export function parseSheetId(s: string): string {
@@ -32,13 +48,34 @@ export function parseSheetId(s: string): string {
 
 export const sheetUrl = (id: string) => `https://docs.google.com/spreadsheets/d/${id}/edit`;
 
+/** Link to the app that preselects this Sheet (for colleagues). Contains only the Sheet ID. */
+export const appLinkFor = (id: string) => `${location.origin}${location.pathname}?sheet=${encodeURIComponent(id)}`;
+
+/** A Sheet ID passed in the app link (?sheet=…) wins over the remembered one, and is then remembered. */
+export function sheetFromUrl(): string {
+  const id = new URLSearchParams(location.search).get('sheet');
+  if (!id) return '';
+  const clean = parseSheetId(id);
+  if (clean !== remembered().sheetId) remember({ sheetId: clean, sheetTitle: '' });
+  // Keep the address bar tidy (the hash route stays).
+  history.replaceState(null, '', `${location.pathname}${location.hash}`);
+  return clean;
+}
+
 export const auth = new GoogleAuth();
+
+export async function signIn(): Promise<string> {
+  const email = await auth.signIn(remembered().user);
+  remember({ user: email });
+  return email;
+}
 
 export async function openSheet(id: string): Promise<Repo> {
   const api = new HttpSheetsApi(id, () => auth.getToken(), () => auth.renew());
-  const store = new SheetsStore(api, 'Google Sheet');
+  const title = await api.getTitle();
+  const store = new SheetsStore(api, title);
   await store.init();
-  remember(id);
+  remember({ sheetId: id, sheetTitle: title });
   return new Repo(store, auth.email || 'unknown');
 }
 
@@ -59,8 +96,4 @@ export async function createSheet(season: string): Promise<{ id: string; repo: R
   cfg.idPrefix = `SOS${season.slice(-2)}`;
   await repo.saveConfig(cfg);
   return { id, repo };
-}
-
-export function forgetSheet(): void {
-  remember('');
 }

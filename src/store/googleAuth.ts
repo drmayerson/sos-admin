@@ -14,7 +14,7 @@ interface TokenResponse {
   error_description?: string;
 }
 interface TokenClient {
-  requestAccessToken(o?: { prompt?: string }): void;
+  requestAccessToken(o?: { prompt?: string; login_hint?: string }): void;
   callback: (r: TokenResponse) => void;
 }
 declare global {
@@ -48,18 +48,24 @@ export class GoogleAuth {
   private token = '';
   private expiresAt = 0;
   private pending: { resolve: (t: string) => void; reject: (e: Error) => void } | null = null;
+  private hint = '';
   email = '';
 
   get configured(): boolean {
     return GOOGLE_CLIENT_ID !== '';
   }
 
-  /** Interactive sign-in (must be called from a click). Resolves with the user's e-mail. */
-  async signIn(): Promise<string> {
-    await this.request('consent');
+  /**
+   * Sign-in (must be called from a click). With `hint` (the e-mail used last time) Google skips the account
+   * chooser and, once access was granted before, the consent screen: the pop-up just flashes and closes.
+   */
+  async signIn(hint = ''): Promise<string> {
+    this.hint = hint;
+    await this.request('');
     const r = await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { Authorization: `Bearer ${this.token}` } });
     if (!r.ok) throw new Error('Signed in, but could not read your e-mail address.');
     this.email = (await r.json()).email ?? '';
+    this.hint = this.email;
     return this.email;
   }
 
@@ -106,7 +112,7 @@ export class GoogleAuth {
     }
     return new Promise<string>((resolve, reject) => {
       this.pending = { resolve, reject };
-      this.client!.requestAccessToken({ prompt });
+      this.client!.requestAccessToken(this.hint ? { prompt, login_hint: this.hint } : { prompt });
     });
   }
 }

@@ -79,6 +79,11 @@ export class HttpSheetsApi implements SheetsApi {
     return (await res.json()) as T;
   }
 
+  async getTitle(): Promise<string> {
+    const r = await this.call<{ properties: { title: string } }>('?fields=properties.title');
+    return r.properties.title;
+  }
+
   async getSheets(): Promise<SheetInfo[]> {
     type R = { sheets: { properties: { sheetId: number; title: string; gridProperties: { rowCount: number; columnCount: number } } }[] };
     const r = await this.call<R>('?fields=sheets.properties');
