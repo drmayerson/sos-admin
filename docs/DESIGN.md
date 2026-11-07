@@ -81,6 +81,20 @@ Automate the Summer of Science application workflow (intake → checks → cours
 - **Financial aid:** search a student, add/change an amount (also after admission); fee updates immediately; overview list with total aid given. (A separate financial-aid application form exists — possible future import.)
 - **Admission e-mail export:** Excel for mail merge of all locked, not-yet-admitted students, including the **parent e-mail** (admission/payment e-mails always go to the parent too). Students are marked "admitted" (with date) only after the user confirms "I've sent these".
 
+### Phase 2 decisions (Daniel, 7 Nov 2026)
+- **Capacity:** the algorithm fills each course up to its **current limit**, which starts at the soft max. A course that is full while students are waiting for it is flagged in the preview; the user can raise the limit (never above the hard max) and re-run.
+- **Course order per student:** their own choices in preference order, skipping courses marked **NOT OK**; after that, courses marked **OK** that weren't among their choices. An OK mark doesn't restrict the student to OK courses.
+- **Prerequisites (structured):** per course, a minimum age on the session start date, or an explicit "no prerequisites" tick; assignment refuses to run while a course has neither. A course whose prerequisite the student doesn't meet is skipped, unless that course is marked OK for the student. Free-text prerequisite notes are informational.
+- **FL priority and fee:** "claimed" counts as Flemish until rejected (confirmed → FL, rejected → other). The admission export warns about students still "claimed".
+- **Order:** locked and manually assigned (pinned) students keep their seats first; then FL students by posting time, then the others by posting time (ties by ID). Flags don't affect the order.
+- **Dorms full:** FULL students beyond the session's dorm capacity still get a course place and appear on a **"dorm full" list** in priority order with their form fallback answer; the user switches them to EVENING / DAY, withdraws them, or lets them wait. The fee follows the final accommodation.
+- **Locking:** a student can't be locked while unassigned, while waiting for a dorm place, or while their **YOUNG flag is open**. Batch locks skip such students and report why.
+- **Waitlist:** unassigned students in priority order; manual assignment pins a course (pinned students are never moved by re-runs, but aren't "locked" = not yet communicated).
+- **Young flag reopens** automatically when a re-run assigns the student a course other than the one it was closed with.
+- **Admission export:** one row per student: student and parent contact (parent e-mail repeated in a CC column only if it differs from the student's), session, course, accommodation, fee, aid, amount due, payment deadline (export date + deadline days). After "I've sent these", `AdmittedAt` and `PaymentDeadline` are written.
+- **Sheet writes** use RAW input (no formulas are ever interpreted from applicant text) and locate rows by ID freshly before every write, so sorting the Sheet by hand is safe.
+- **Google access:** OAuth token flow with the `drive.file` scope (the app only sees the Sheet it created) plus `email` for the audit-log user name. The access token lives only in memory; only the Sheet's ID is remembered in the browser.
+
 ## 5. Stage 3 — payment
 
 - Upload the payment-form CSV (5 columns: name, e-mail (student or parent), proof-of-payment *file name*, terms link, terms checkbox).

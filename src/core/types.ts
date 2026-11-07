@@ -8,6 +8,14 @@ export interface CourseConfig {
   code: string;
   softMax: number;
   hardMax: number;
+  /** Current limit used by the assignment algorithm: starts at softMax, may be raised up to hardMax. */
+  limit: number;
+  /** Prerequisite: minimum age on the session start date (null = no age rule). */
+  minAge: number | null;
+  /** Explicit "this course has no prerequisites" tick. */
+  noPrereqs: boolean;
+  /** Informational free text (e.g. "basic programming"). */
+  prereqNote: string;
 }
 
 export interface SessionConfig {
@@ -79,6 +87,22 @@ export const APP_COLS = {
   assignedCourse: 'AssignedCourse',
   /** Assigned course at the moment the YOUNG flag was closed; a different assignment reopens the flag (phase 2). */
   youngApprovedWith: 'YoungApprovedWith',
+  /** Why the algorithm assigned what it did (e.g. "2nd choice", "waitlist: …"). */
+  assignNote: 'AssignNote',
+  /** Manual course assignment from the waitlist; re-runs never move a pinned student. */
+  pinnedCourse: 'PinnedCourse',
+  /** "TRUE" = FULL student with a course place but no dorm place (on the "dorm full" list). */
+  dormWaiting: 'DormWaiting',
+  /** Accommodation after the user's decisions (e.g. FULL → EVENING when dorms are full). Empty = the form answer. */
+  accommodationFinal: 'AccommodationFinal',
+  locked: 'Locked',
+  lockedAt: 'LockedAt',
+  fee: 'Fee',
+  aid: 'Aid',
+  aidNote: 'AidNote',
+  amountDue: 'AmountDue',
+  admittedAt: 'AdmittedAt',
+  paymentDeadline: 'PaymentDeadline',
   notes: 'Notes',
   withdrawnReason: 'WithdrawnReason',
 } as const;

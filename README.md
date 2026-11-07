@@ -7,7 +7,7 @@ Admin tool for the KU Leuven **Summer of Science** application workflow: import 
 
 Docs: [`docs/DESIGN.md`](docs/DESIGN.md) · [`docs/REMINDERS.md`](docs/REMINDERS.md) · [`docs/ORIGINAL_PLAN.md`](docs/ORIGINAL_PLAN.md) · test data: [`test-data/`](test-data/)
 
-Status: phase 1 (season setup, CSV import, checks, review screens, audit log) built, running on synthetic demo data. Google Sheets connection comes in phase 2.
+Status: phase 1 (import, checks, review screens, audit log) and phase 2 (Google Sheets connection, assignment with preview, waitlist, dorm-full list, locking, fees, financial aid, admission mail merge) built. Phase 3 (payments) next.
 
 ## Running it
 
@@ -25,6 +25,6 @@ Pushing to `main` runs the tests and deploys to GitHub Pages (`.github/workflows
 ## Code layout
 
 - `src/core/` — all business logic, pure TypeScript, no UI: CSV decoding/parsing, column mapping, import planning (IDs, import keys, exact/near duplicates), automatic flags, and `Repo` (domain operations + audit logging on top of a `TableStore`).
-- `src/store/` — store implementations. Phase 1: demo store (in memory, synthetic data). Phase 2: Google Sheets.
+- `src/store/` — demo store (in memory, synthetic data), Google sign-in (`googleAuth.ts`, holds the public OAuth client ID), Sheets API client and `SheetsStore`.
 - `src/ui/` — Preact screens; they only call `Repo` and core functions.
 - `tests/` — Vitest tests driven by `test-data/`.

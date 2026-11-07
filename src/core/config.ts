@@ -18,7 +18,9 @@ export function configFromJson(j: ConfigJson): SeasonConfig {
     season: j.season,
     idPrefix: j.idPrefix,
     sessions: j.sessions.map((s) => ({ key: s.key, label: s.label, startDate: s.startDate, dormCapacity: s.dormCapacity })),
-    courses: j.sessions.flatMap((s) => s.courses.map((c) => ({ session: s.key, ...c }))),
+    courses: j.sessions.flatMap((s) =>
+      s.courses.map((c) => ({ session: s.key, ...c, limit: c.softMax, minAge: null, noPrereqs: false, prereqNote: '' })),
+    ),
     fees: structuredClone(j.fees),
     thresholds: { ...j.thresholds },
     paymentDeadlineDays: j.paymentDeadlineDays,
@@ -56,7 +58,16 @@ export function configToTables(c: SeasonConfig): ConfigTables {
   return {
     Config: kv.map(([Key, Value]) => ({ Key, Value })),
     Sessions: c.sessions.map((s) => ({ Key: s.key, Label: s.label, StartDate: s.startDate, DormCapacity: String(s.dormCapacity) })),
-    Courses: c.courses.map((x) => ({ Session: x.session, Code: x.code, SoftMax: String(x.softMax), HardMax: String(x.hardMax) })),
+    Courses: c.courses.map((x) => ({
+      Session: x.session,
+      Code: x.code,
+      SoftMax: String(x.softMax),
+      HardMax: String(x.hardMax),
+      Limit: String(x.limit),
+      MinAge: x.minAge === null ? '' : String(x.minAge),
+      NoPrerequisites: x.noPrereqs ? 'TRUE' : '',
+      PrerequisiteNote: x.prereqNote,
+    })),
   };
 }
 
@@ -83,7 +94,16 @@ export function configFromTables(t: ConfigTables): SeasonConfig {
     fees: Object.fromEntries(ACC.map((a) => [a, { FL: num(`fee.${a}.FL`), other: num(`fee.${a}.other`) }])) as SeasonConfig['fees'],
     columnMap,
     sessions: t.Sessions.map((r) => ({ key: r.Key, label: r.Label, startDate: r.StartDate, dormCapacity: Number(r.DormCapacity) })),
-    courses: t.Courses.map((r) => ({ session: r.Session, code: r.Code, softMax: Number(r.SoftMax), hardMax: Number(r.HardMax) })),
+    courses: t.Courses.map((r) => ({
+      session: r.Session,
+      code: r.Code,
+      softMax: Number(r.SoftMax),
+      hardMax: Number(r.HardMax),
+      limit: r.Limit ? Number(r.Limit) : Number(r.SoftMax),
+      minAge: (r.MinAge ?? '').trim() === '' ? null : Number(r.MinAge),
+      noPrereqs: r.NoPrerequisites === 'TRUE',
+      prereqNote: r.PrerequisiteNote ?? '',
+    })),
   };
 }
 
@@ -106,6 +126,8 @@ export function validateConfig(c: SeasonConfig): string[] {
     if (codes.has(x.code)) errs.push(`Course code ${x.code} is used twice.`);
     codes.add(x.code);
     if (!(x.softMax > 0 && x.hardMax >= x.softMax)) errs.push(`Course ${x.code}: need 0 < soft max ≤ hard max.`);
+    if (!(x.limit > 0 && x.limit <= x.hardMax)) errs.push(`Course ${x.code}: current limit must be between 1 and the hard max.`);
+    if (x.minAge !== null && !(x.minAge > 0 && x.minAge < 30)) errs.push(`Course ${x.code}: minimum age looks wrong.`);
   }
   return errs;
 }
@@ -124,4 +146,9 @@ export function choiceFields(c: SeasonConfig): Record<string, [FieldKey, FieldKe
     if (groups[i]) out[s.key] = groups[i];
   });
   return out;
+}
+
+/** Courses with neither a prerequisite rule nor an explicit "no prerequisites" tick (assignment refuses to run). */
+export function coursesMissingPrereqs(c: SeasonConfig): string[] {
+  return c.courses.filter((x) => x.minAge === null && !x.noPrereqs).map((x) => x.code);
 }

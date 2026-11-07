@@ -18,6 +18,8 @@ export interface TableStore {
   update(table: TableName, keyCol: string, updates: { key: string; values: Row }[]): Promise<void>;
   /** Replace a whole tab (used for the small Config/Sessions/Courses tabs only). */
   replace(table: TableName, rows: Row[]): Promise<void>;
+  /** Forget cached data so the next read fetches fresh (e.g. after editing the Sheet by hand). */
+  refresh?(): void;
 }
 
 /** In-memory implementation. Used by the demo mode and the unit tests. */

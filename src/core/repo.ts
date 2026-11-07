@@ -4,6 +4,14 @@ import { derivedChoices, reconcileAutoFlags } from './flags';
 import { planImport, type ImportPlan } from './importer';
 import type { TableStore } from './store';
 import { courseDecisionColumns, type CourseDecision } from './young';
+import { diffAssignment, isLocked, lockBlockers, runAssignment, staleUnlocked, type AssignChange, type AssignResult } from './assign';
+import { feeColumns, formatAmount, parseAmount } from './fees';
+
+/** Columns the app computes itself; never edited directly. */
+const MANAGED_COLS: string[] = [
+  APP_COLS.id, APP_COLS.importKey, APP_COLS.postingUTC, APP_COLS.session, APP_COLS.choice1, APP_COLS.choice2, APP_COLS.choice3,
+  APP_COLS.openFlags, APP_COLS.fee, APP_COLS.amountDue,
+];
 import {
   APP_COLS, FIELD_KEYS, FLAG_COLS, type AuditEntry, type FlagStatus, type NewFlag, type Row, type SeasonConfig,
 } from './types';
@@ -98,35 +106,146 @@ export class Repo {
    * automatic flags (new problems get a flag; open flags that no longer apply are closed).
    */
   async updateApplication(id: string, changes: Row, action = 'edit'): Promise<void> {
+    for (const k of Object.keys(changes))
+      if (MANAGED_COLS.includes(k)) throw new Error(`Column ${k} is managed by the app and can't be edited directly.`);
+    await this.bulkUpdate([{ id, values: changes }], action);
+  }
+
+  /**
+   * Write changes to several applications in one store write + one audit append (important for Google
+   * Sheets quotas). Recomputes derived session/choices after form edits and fees after anything; re-checks
+   * automatic flags of applications whose form data changed.
+   */
+  private async bulkUpdate(updates: { id: string; values: Row }[], action: string): Promise<void> {
     const cfg = await this.requireConfig();
     const apps = await this.store.readAll('Applications');
-    const app = apps.find((a) => a[APP_COLS.id] === id);
-    if (!app) throw new Error(`No application ${id}`);
-    const derivedCols: string[] = [APP_COLS.id, APP_COLS.importKey, APP_COLS.postingUTC, APP_COLS.session, APP_COLS.choice1, APP_COLS.choice2, APP_COLS.choice3, APP_COLS.openFlags];
-    const real: Row = {};
-    for (const [k, v] of Object.entries(changes)) {
-      if (derivedCols.includes(k)) throw new Error(`Column ${k} is managed by the app and can't be edited directly.`);
-      if ((app[k] ?? '') !== v) real[k] = v;
-    }
-    if (Object.keys(real).length === 0) return;
-    const next = { ...app, ...real };
+    const byId = new Map(apps.map((a) => [a[APP_COLS.id], a]));
     const formCols = new Set(FIELD_KEYS.map((k) => cfg.columnMap[k]));
-    const formChanged = Object.keys(real).some((k) => formCols.has(k));
-    if (formChanged) {
-      const { session, choices } = derivedChoices(next, cfg);
-      const derived: Row = { [APP_COLS.session]: session, [APP_COLS.choice1]: choices[0], [APP_COLS.choice2]: choices[1], [APP_COLS.choice3]: choices[2] };
-      for (const [k, v] of Object.entries(derived)) if ((app[k] ?? '') !== v) real[k] = v;
+    const writes: { key: string; values: Row }[] = [];
+    const audit: AuditEntry[] = [];
+    const reconcile: string[] = [];
+    for (const u of updates) {
+      const app = byId.get(u.id);
+      if (!app) throw new Error(`No application ${u.id}`);
+      const real: Row = {};
+      for (const [k, v] of Object.entries(u.values)) if ((app[k] ?? '') !== v) real[k] = v;
+      if (Object.keys(real).length === 0) continue;
+      const formChanged = Object.keys(real).some((k) => formCols.has(k));
+      if (formChanged) {
+        const { session, choices } = derivedChoices({ ...app, ...real }, cfg);
+        const derived: Row = { [APP_COLS.session]: session, [APP_COLS.choice1]: choices[0], [APP_COLS.choice2]: choices[1], [APP_COLS.choice3]: choices[2] };
+        for (const [k, v] of Object.entries(derived)) if ((app[k] ?? '') !== v) real[k] = v;
+        reconcile.push(u.id);
+      }
+      for (const [k, v] of Object.entries(feeColumns({ ...app, ...real }, cfg))) if ((app[k] ?? '') !== v) real[k] = v;
+      writes.push({ key: u.id, values: real });
+      for (const [k, v] of Object.entries(real)) audit.push(this.entry(u.id, k, app[k] ?? '', v, action));
+      Object.assign(app, real); // later updates in the same batch see this one
     }
-    await this.store.update('Applications', APP_COLS.id, [{ key: id, values: real }]);
-    await this.store.append(
-      'AuditLog',
-      Object.entries(real).map(([k, v]) => this.entry(id, k, app[k] ?? '', v, action)) as unknown as Row[],
-    );
-    if (formChanged) await this.reconcileFlags(id, cfg);
+    if (writes.length === 0) return;
+    await this.store.update('Applications', APP_COLS.id, writes);
+    await this.store.append('AuditLog', audit as unknown as Row[]);
+    for (const id of reconcile) await this.reconcileFlags(id, cfg);
   }
 
   async withdraw(id: string, reason: string): Promise<void> {
-    await this.updateApplication(id, { [APP_COLS.status]: 'withdrawn', [APP_COLS.withdrawnReason]: reason }, 'withdraw');
+    await this.bulkUpdate(
+      [{ id, values: { [APP_COLS.status]: 'withdrawn', [APP_COLS.withdrawnReason]: reason, [APP_COLS.assignedCourse]: '', [APP_COLS.pinnedCourse]: '', [APP_COLS.dormWaiting]: '' } }],
+      'withdraw',
+    );
+  }
+
+  // ---------------------------------------------------------------- assignment (phase 2)
+
+  async previewAssignment(): Promise<{ result: AssignResult; changes: AssignChange[]; stale: number }> {
+    const cfg = await this.requireConfig();
+    const apps = await this.store.readAll('Applications');
+    const result = runAssignment(apps, cfg);
+    return { result, changes: result.errors.length ? [] : diffAssignment(apps, result), stale: staleUnlocked(apps, this.clock()).length };
+  }
+
+  /**
+   * Apply a (re)assignment. Recomputes on fresh data and refuses if that differs from the previewed changes.
+   * Re-opens a closed YOUNG flag when the student now gets a different course than the one it was closed with.
+   */
+  async applyAssignment(previewed: AssignChange[]): Promise<number> {
+    const { result, changes } = await this.previewAssignment();
+    if (result.errors.length) throw new Error(result.errors.join(' '));
+    if (JSON.stringify(changes) !== JSON.stringify(previewed)) throw new Error('The data changed since the preview. Please preview again.');
+    const apps = await this.store.readAll('Applications');
+    const updates = apps
+      .filter((a) => result.placements.has(a[APP_COLS.id]) && !isLocked(a))
+      .map((a) => {
+        const p = result.placements.get(a[APP_COLS.id])!;
+        return { id: a[APP_COLS.id], values: { [APP_COLS.assignedCourse]: p.course, [APP_COLS.dormWaiting]: p.dormWaiting ? 'TRUE' : '', [APP_COLS.assignNote]: p.note } };
+      });
+    await this.bulkUpdate(updates, 'assignment run');
+    const flags = await this.store.readAll('Flags');
+    for (const f of flags) {
+      // Only flags closed with the young-student "OK" button (approved); auto-resolved ones stay closed.
+      if (f[FLAG_COLS.type] !== 'YOUNG' || f[FLAG_COLS.status] !== 'approved') continue;
+      const a = apps.find((x) => x[APP_COLS.id] === f[FLAG_COLS.appId]);
+      const p = a && result.placements.get(a[APP_COLS.id]);
+      if (a && p && !isLocked(a) && p.course !== (a[APP_COLS.youngApprovedWith] ?? ''))
+        await this.setFlagStatus(f[FLAG_COLS.flagId], 'open', `reopened: course changed from ${a[APP_COLS.youngApprovedWith] || '(none)'} to ${p.course || '(none)'}`, 'assignment run');
+    }
+    return changes.length;
+  }
+
+  /** Manually assign a course (from the waitlist). Pinned students are never moved by re-runs. */
+  async pin(id: string, course: string): Promise<void> {
+    await this.bulkUpdate([{ id, values: { [APP_COLS.pinnedCourse]: course, [APP_COLS.assignedCourse]: course, [APP_COLS.assignNote]: course ? 'manual assignment' : '' } }], 'manual assignment');
+  }
+
+  async unpin(id: string): Promise<void> {
+    await this.bulkUpdate([{ id, values: { [APP_COLS.pinnedCourse]: '' } }], 'manual assignment removed');
+  }
+
+  /** Dorm-full decision: switch to EVENING/DAY (or back to FULL). */
+  async setAccommodation(id: string, acc: 'FULL' | 'EVENING' | 'DAY'): Promise<void> {
+    const values: Row = { [APP_COLS.accommodationFinal]: acc };
+    if (acc !== 'FULL') values[APP_COLS.dormWaiting] = '';
+    await this.bulkUpdate([{ id, values }], 'accommodation decision');
+  }
+
+  // ---------------------------------------------------------------- locking
+
+  /** Lock students (= communicated). Returns the ones that couldn't be locked, with reasons. */
+  async lock(ids: string[]): Promise<{ id: string; why: string[] }[]> {
+    const [apps, flags] = await Promise.all([this.store.readAll('Applications'), this.store.readAll('Flags')]);
+    const skipped: { id: string; why: string[] }[] = [];
+    const updates: { id: string; values: Row }[] = [];
+    const today = this.clock().slice(0, 10);
+    for (const id of ids) {
+      const a = apps.find((x) => x[APP_COLS.id] === id);
+      if (!a) continue;
+      if (isLocked(a)) continue;
+      const why = lockBlockers(a, flags);
+      if (why.length) skipped.push({ id, why });
+      else updates.push({ id, values: { [APP_COLS.locked]: 'TRUE', [APP_COLS.lockedAt]: today } });
+    }
+    await this.bulkUpdate(updates, 'lock');
+    return skipped;
+  }
+
+  async unlock(id: string, reason: string): Promise<void> {
+    await this.bulkUpdate([{ id, values: { [APP_COLS.locked]: '', [APP_COLS.lockedAt]: '' } }], `unlock: ${reason}`);
+  }
+
+  // ---------------------------------------------------------------- fees, aid, admission
+
+  async setAid(id: string, amount: string, note: string): Promise<void> {
+    const n = parseAmount(amount);
+    if (Number.isNaN(n) || n < 0) throw new Error(`"${amount}" is not a valid amount.`);
+    await this.bulkUpdate([{ id, values: { [APP_COLS.aid]: n ? formatAmount(n) : '', [APP_COLS.aidNote]: note } }], 'financial aid');
+  }
+
+  /** After the user confirmed the admission e-mails were sent. */
+  async markAdmitted(ids: string[], admittedAt: string, paymentDeadline: string): Promise<void> {
+    await this.bulkUpdate(
+      ids.map((id) => ({ id, values: { [APP_COLS.admittedAt]: admittedAt, [APP_COLS.paymentDeadline]: paymentDeadline } })),
+      'admitted',
+    );
   }
 
   async reinstate(id: string): Promise<void> {

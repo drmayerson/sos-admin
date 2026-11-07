@@ -70,7 +70,7 @@ export function Setup() {
       <div class="panel">
         <h2>Courses</h2>
         <table><tbody>
-          <tr><th>Session</th><th>Code (as in the form)</th><th>Soft max</th><th>Hard max</th><th /></tr>
+          <tr><th>Session</th><th>Code (as in the form)</th><th>Soft max</th><th>Hard max</th><th>Min. age on start</th><th>No prerequisites</th><th>Prerequisite note</th><th /></tr>
           {c.courses.map((k, i) => (
             <tr>
               <td>
@@ -79,13 +79,41 @@ export function Setup() {
                 </select>
               </td>
               <td>{txt(k.code, (v) => upd((x) => (x.courses[i].code = v.trim())))}</td>
-              <td>{num(k.softMax, (v) => upd((x) => (x.courses[i].softMax = v)))}</td>
+              <td>{num(k.softMax, (v) => upd((x) => { if (x.courses[i].limit === x.courses[i].softMax) x.courses[i].limit = v; x.courses[i].softMax = v; }))}</td>
               <td>{num(k.hardMax, (v) => upd((x) => (x.courses[i].hardMax = v)))}</td>
+              <td>
+                <input
+                  type="number"
+                  style={{ width: '4.5em' }}
+                  value={k.minAge ?? ''}
+                  onInput={(e) => {
+                    const v = (e.target as HTMLInputElement).value;
+                    upd((x) => {
+                      x.courses[i].minAge = v === '' ? null : Number(v);
+                      if (v !== '') x.courses[i].noPrereqs = false;
+                    });
+                  }}
+                />
+              </td>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={k.noPrereqs}
+                  disabled={k.minAge !== null}
+                  onChange={() => upd((x) => (x.courses[i].noPrereqs = !x.courses[i].noPrereqs))}
+                />
+              </td>
+              <td>{txt(k.prereqNote, (v) => upd((x) => (x.courses[i].prereqNote = v)))}</td>
               <td><button onClick={() => upd((x) => x.courses.splice(i, 1))}>Remove</button></td>
             </tr>
           ))}
         </tbody></table>
-        <button onClick={() => upd((x) => x.courses.push({ session: x.sessions[0].key, code: '', softMax: 12, hardMax: 14 }))}>Add course</button>
+        <p class="muted small">
+          Every course needs a minimum age or the "no prerequisites" tick before assignment can run. A student marked OK for a
+          course on the Young students screen is allowed in regardless of the minimum age. The current limit (soft max at first)
+          is changed on the Assign courses screen.
+        </p>
+        <button onClick={() => upd((x) => x.courses.push({ session: x.sessions[0].key, code: '', softMax: 12, hardMax: 14, limit: 12, minAge: null, noPrereqs: false, prereqNote: '' }))}>Add course</button>
       </div>
 
       <div class="panel">

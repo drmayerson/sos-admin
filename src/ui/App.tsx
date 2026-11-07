@@ -1,24 +1,40 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
-import type { Snapshot } from '../core/repo';
-import { createDemoRepo } from '../store/demo';
+import { useEffect, useState } from 'preact/hooks';
+import type { Repo, Snapshot } from '../core/repo';
+import { auth, sheetUrl } from '../store/connect';
 import { AppCtx, type Ctx } from './ctx';
+import { Admissions } from './screens/Admissions';
 import { ApplicationDetail, Applications } from './screens/Applications';
+import { Assignment } from './screens/Assignment';
 import { Audit } from './screens/Audit';
+import { Connect } from './screens/Connect';
+import { DormFull } from './screens/DormFull';
+import { FinancialAid } from './screens/FinancialAid';
 import { Flags } from './screens/Flags';
 import { Home } from './screens/Home';
 import { Import } from './screens/Import';
+import { Locking } from './screens/Locking';
 import { Merge } from './screens/Merge';
 import { Setup } from './screens/Setup';
+import { Waitlist } from './screens/Waitlist';
 import { Young } from './screens/Young';
 
 const NAV: [string, string][] = [
   ['', 'Home'],
   ['setup', 'Season setup'],
+  ['-', 'Applications'],
   ['import', 'Import CSV'],
   ['merge', 'Near-duplicates'],
   ['young', 'Young students'],
   ['flags', 'Flags'],
   ['apps', 'Applications'],
+  ['-', 'Assignment'],
+  ['assign', 'Assign courses'],
+  ['waitlist', 'Waitlist'],
+  ['dorms', 'Dorm full'],
+  ['lock', 'Locking'],
+  ['aid', 'Financial aid'],
+  ['admit', 'Admissions'],
+  ['-', ''],
   ['audit', 'Audit log'],
 ];
 
@@ -37,24 +53,42 @@ function useHashRoute(): string[] {
 }
 
 export function App() {
-  // Phase 1: demo store only. Phase 2 adds Google sign-in + SheetsStore behind the same Repo.
-  const repo = useMemo(() => createDemoRepo(), []);
+  const [conn, setConn] = useState<{ repo: Repo; sheetId: string } | null>(null);
+  return conn ? (
+    <Main repo={conn.repo} sheetId={conn.sheetId} onDisconnect={() => setConn(null)} />
+  ) : (
+    <Connect onReady={(repo, sheetId) => setConn({ repo, sheetId })} />
+  );
+}
+
+function Main({ repo, sheetId, onDisconnect }: { repo: Repo; sheetId: string; onDisconnect: () => void }) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const route = useHashRoute();
   useEffect(() => setMsg(null), [route.join('/')]);
 
-  const reload = async () => setSnap(await repo.snapshot());
+  const reload = async (fresh = false) => {
+    if (fresh) repo.store.refresh?.();
+    try {
+      setSnap(await repo.snapshot());
+    } catch (e) {
+      setMsg({ kind: 'err', text: e instanceof Error ? e.message : String(e) });
+    }
+  };
   useEffect(() => {
     reload();
-  }, []);
+    // Coming back to the tab (e.g. after editing the Sheet by hand): read fresh data.
+    const onFocus = () => !repo.store.isDemo && reload(true);
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [repo]);
 
-  if (!snap) return <p class="pad">Loading…</p>;
+  if (!snap) return <p class="pad">{msg ? <span class="err-text">{msg.text}</span> : 'Loading…'}</p>;
 
   const ctx: Ctx = {
     repo,
     snap,
-    reload,
+    reload: () => reload(),
     run: async (what, done) => {
       try {
         await what();
@@ -62,6 +96,7 @@ export function App() {
         setMsg(done ? { kind: 'ok', text: done } : null);
         return true;
       } catch (e) {
+        await reload(true);
         setMsg({ kind: 'err', text: e instanceof Error ? e.message : String(e) });
         return false;
       }
@@ -69,17 +104,22 @@ export function App() {
   };
 
   const [page, arg] = route;
-  let body;
-  switch (page) {
-    case 'setup': body = <Setup />; break;
-    case 'import': body = <Import />; break;
-    case 'merge': body = <Merge />; break;
-    case 'young': body = <Young />; break;
-    case 'flags': body = <Flags />; break;
-    case 'apps': body = arg ? <ApplicationDetail id={arg} /> : <Applications />; break;
-    case 'audit': body = <Audit />; break;
-    default: body = <Home />;
-  }
+  const screens: Record<string, () => preact.JSX.Element> = {
+    setup: () => <Setup />,
+    import: () => <Import />,
+    merge: () => <Merge />,
+    young: () => <Young />,
+    flags: () => <Flags />,
+    apps: () => (arg ? <ApplicationDetail id={arg} /> : <Applications />),
+    assign: () => <Assignment />,
+    waitlist: () => <Waitlist />,
+    dorms: () => <DormFull />,
+    lock: () => <Locking />,
+    aid: () => <FinancialAid />,
+    admit: () => <Admissions />,
+    audit: () => <Audit />,
+  };
+  const body = (screens[page] ?? (() => <Home />))();
 
   return (
     <AppCtx.Provider value={ctx}>
@@ -88,12 +128,29 @@ export function App() {
         <nav>
           <div class="brand">SOS admin</div>
           <div class="season">{snap.cfg ? `Season ${snap.cfg.season}` : 'No season set up'}</div>
-          {NAV.map(([path, label]) => (
-            <a href={`#/${path}`} class={(page ?? '') === path ? 'active' : ''}>
-              {label}
-            </a>
-          ))}
-          <div class="store">{repo.store.label}</div>
+          {NAV.map(([path, label]) =>
+            path === '-' ? (
+              <div class="nav-section">{label}</div>
+            ) : (
+              <a href={`#/${path}`} class={(page ?? '') === path ? 'active' : ''}>
+                {label}
+              </a>
+            ),
+          )}
+          <div class="store">
+            {sheetId ? (
+              <>
+                <a href={sheetUrl(sheetId)} target="_blank" rel="noopener noreferrer">Open the Google Sheet ↗</a>
+                <button class="link" onClick={() => reload(true).then(() => setMsg({ kind: 'ok', text: 'Reloaded from the Sheet.' }))}>Reload from Sheet</button>
+                <div class="small">{repo.user}</div>
+              </>
+            ) : (
+              repo.store.label
+            )}
+            <button class="link" onClick={() => { if (sheetId) auth.signOut(); onDisconnect(); }}>
+              {sheetId ? 'Sign out' : 'Leave demo'}
+            </button>
+          </div>
         </nav>
         <main>
           {msg && (

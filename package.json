@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "papaparse": "^5.7.0",
-    "preact": "^11.2.0"
+    "preact": "^11.2.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",

@@ -8,7 +8,13 @@ import { Repo } from '../core/repo';
 import { MemoryTableStore } from '../core/store';
 
 export function createDemoRepo(): Repo {
-  const t = configToTables(configFromJson(cfgJson as ConfigJson));
+  const cfg = configFromJson(cfgJson as ConfigJson);
+  // Demo prerequisites so assignment can run: RELATIVITY needs age 16, the others have none.
+  for (const c of cfg.courses) {
+    if (c.code === 'RELATIVITY') c.minAge = 16;
+    else c.noPrereqs = true;
+  }
+  const t = configToTables(cfg);
   const store = new MemoryTableStore('Demo (synthetic data, not saved)', t);
   return new Repo(store, 'demo-user');
 }

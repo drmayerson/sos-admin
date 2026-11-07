@@ -24,13 +24,24 @@ export function Home() {
         <Card n={openOf('NEAR_DUPLICATE')} label="near-duplicates to review" href="#/merge" alert={openOf('NEAR_DUPLICATE') > 0} />
         <Card n={openOf('YOUNG')} label="young students to decide" href="#/young" alert={openOf('YOUNG') > 0} />
       </div>
+      <h2>Assignment</h2>
+      <div class="cards">
+        <Card n={active.filter((a) => a[APP_COLS.assignedCourse]).length} label="assigned to a course" href="#/assign" />
+        <Card n={active.filter((a) => !a[APP_COLS.assignedCourse]).length} label="without a course (waitlist)" href="#/waitlist" />
+        <Card n={active.filter((a) => a[APP_COLS.dormWaiting] === 'TRUE').length} label="waiting for a dorm place" href="#/dorms" alert={active.some((a) => a[APP_COLS.dormWaiting] === 'TRUE')} />
+        <Card n={active.filter((a) => a[APP_COLS.locked] === 'TRUE').length} label="locked" href="#/lock" />
+        <Card n={active.filter((a) => a[APP_COLS.locked] === 'TRUE' && !a[APP_COLS.admittedAt]).length} label="locked, admission e-mail not sent" href="#/admit" alert={active.some((a) => a[APP_COLS.locked] === 'TRUE' && !a[APP_COLS.admittedAt])} />
+        <Card n={active.filter((a) => a[APP_COLS.admittedAt]).length} label="admitted" href="#/admit" />
+      </div>
       <h2>Next steps</h2>
       <ol>
         <li><a href="#/setup">Season setup</a>: sessions, courses, capacities, fees, thresholds, column mapping.</li>
         <li><a href="#/import">Import CSV</a>: upload the full application export (always all applications); only new rows are added.</li>
         <li>Review <a href="#/merge">near-duplicates</a>, <a href="#/young">young students</a> and other <a href="#/flags">flags</a>.</li>
+        <li><a href="#/assign">Assign courses</a> (preview, then apply); handle the <a href="#/waitlist">waitlist</a> and <a href="#/dorms">dorm full</a> list.</li>
+        <li><a href="#/lock">Lock</a> students, then send the <a href="#/admit">admission e-mails</a>.</li>
       </ol>
-      <p class="muted">Assignment, locking, fees and admissions follow in phase 2.</p>
+      <p class="muted">Payments follow in phase 3.</p>
     </div>
   );
 }

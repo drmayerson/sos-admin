@@ -1,5 +1,6 @@
 import { checkMapping } from './headers';
 import { postingToUTC } from './dates';
+import { feeColumns } from './fees';
 import { computeAutoFlags, derivedChoices, field } from './flags';
 import type { ParsedCsv } from './csv';
 import { fold, normEmail, tidy } from './text';
@@ -112,9 +113,22 @@ export function newAppRow(values: Row, cfg: SeasonConfig, id: string, importKey:
     [APP_COLS.notOkForCourses]: '',
     [APP_COLS.assignedCourse]: '',
     [APP_COLS.youngApprovedWith]: '',
+    [APP_COLS.assignNote]: '',
+    [APP_COLS.pinnedCourse]: '',
+    [APP_COLS.dormWaiting]: '',
+    [APP_COLS.accommodationFinal]: '',
+    [APP_COLS.locked]: '',
+    [APP_COLS.lockedAt]: '',
+    [APP_COLS.fee]: '',
+    [APP_COLS.aid]: '',
+    [APP_COLS.aidNote]: '',
+    [APP_COLS.amountDue]: '',
+    [APP_COLS.admittedAt]: '',
+    [APP_COLS.paymentDeadline]: '',
     [APP_COLS.notes]: '',
     [APP_COLS.withdrawnReason]: '',
   });
+  Object.assign(row, feeColumns(row, cfg));
   return row;
 }
 

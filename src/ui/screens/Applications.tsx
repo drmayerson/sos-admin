@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { field } from '../../core/flags';
+import { effectiveAccommodation, feeColumns } from '../../core/fees';
 import { fieldOptions } from '../../core/fieldOptions';
 import { fold } from '../../core/text';
 import { APP_COLS, FLAG_COLS, type FieldKey, type Row } from '../../core/types';
@@ -120,6 +121,26 @@ export function ApplicationDetail({ id }: { id: string }) {
         <tr><td>Posted</td><td>{fmtTime(app[APP_COLS.postingUTC])}</td></tr>
         <tr><td>Session / choices</td><td>{app[APP_COLS.session] || '?'}: {choicesText(app)}</td></tr>
         <tr><td>Open flags</td><td>{app[APP_COLS.openFlags] || '—'}</td></tr>
+        <tr>
+          <td>Assigned course</td>
+          <td>
+            {app[APP_COLS.assignedCourse] || '—'}
+            {app[APP_COLS.assignNote] && <span class="muted small"> ({app[APP_COLS.assignNote]})</span>}
+            {app[APP_COLS.locked] === 'TRUE' && <span class="badge">locked {app[APP_COLS.lockedAt]}</span>}
+            {app[APP_COLS.pinnedCourse] && <span class="badge">manual</span>}
+            {app[APP_COLS.dormWaiting] === 'TRUE' && <span class="badge warnb">no dorm place yet</span>}
+          </td>
+        </tr>
+        <tr>
+          <td>Accommodation / fee</td>
+          <td>
+            {effectiveAccommodation(app, cfg) || '?'}
+            {app[APP_COLS.accommodationFinal] && app[APP_COLS.accommodationFinal] !== field(app, cfg, 'accommodation') && <span class="muted small"> (form: {field(app, cfg, 'accommodation')})</span>}
+            {' · '}fee {feeColumns(app, cfg)[APP_COLS.fee] || '?'} − aid {app[APP_COLS.aid] || '0'} = <b>{feeColumns(app, cfg)[APP_COLS.amountDue] || '?'} EUR</b>
+            {' '}<a class="small" href="#/aid">edit aid</a>
+          </td>
+        </tr>
+        {app[APP_COLS.admittedAt] && <tr><td>Admitted</td><td>{app[APP_COLS.admittedAt]} · pay by {app[APP_COLS.paymentDeadline]}</td></tr>}
         {app[APP_COLS.mergedInto] && <tr><td>Merged into</td><td><a href={`#/apps/${app[APP_COLS.mergedInto]}`}>{app[APP_COLS.mergedInto]}</a></td></tr>}
         {app[APP_COLS.withdrawnReason] && <tr><td>Withdrawn because</td><td>{app[APP_COLS.withdrawnReason]}</td></tr>}
         {siblings.length > 0 && (
