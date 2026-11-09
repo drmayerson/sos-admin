@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { ADMISSION_COLUMNS, admissionExport, type AdmissionExport } from '../../core/admission';
+import { addDays, ADMISSION_COLUMNS, admissionExport, type AdmissionExport } from '../../core/admission';
 import { APP_COLS } from '../../core/types';
 import { useApp } from '../ctx';
 
@@ -16,9 +16,11 @@ export function Admissions() {
   const { snap, repo, run } = useApp();
   const today = new Date().toISOString().slice(0, 10);
   const [batch, setBatch] = useState<AdmissionExport | null>(null);
+  const [deadline, setDeadline] = useState('');
   if (!snap.cfg) return <p class="warn">Set up the season first.</p>;
   const cfg = snap.cfg;
-  const ex = admissionExport(snap.apps, cfg, today);
+  const dl = deadline || addDays(today, cfg.paymentDeadlineDays);
+  const ex = admissionExport(snap.apps, cfg, today, dl);
   const admitted = snap.apps.filter((a) => a[APP_COLS.admittedAt]);
 
   return (
@@ -27,7 +29,7 @@ export function Admissions() {
       <p>
         The admission mail merge contains all <b>locked</b>, not yet admitted students, with the parent's e-mail (the
         <code> CcParentEmail</code> column is empty when parent and student use the same address). Students are only marked
-        "admitted" after you confirm you've sent the e-mails. The payment deadline is today + {cfg.paymentDeadlineDays} days.
+        "admitted" after you confirm you've sent the e-mails.
       </p>
       <p class="muted small">The Excel file contains personal data: save it only where KU Leuven allows, and delete it after the mail merge.</p>
 
@@ -40,6 +42,13 @@ export function Admissions() {
               <ul>{ex.warnings.map((w) => <li>{w}</li>)}</ul>
             </div>
           )}
+          <div class="row">
+            <label>
+              Payment deadline in these e-mails{' '}
+              <input type="date" min={today} value={dl} onInput={(e) => setDeadline((e.target as HTMLInputElement).value)} />
+            </label>
+            <span class="small muted">default: today + {cfg.paymentDeadlineDays} days (Season setup); shorten it late in the season</span>
+          </div>
           {ex.rows.length > 0 && (
             <>
               <table><tbody>
@@ -82,6 +91,7 @@ export function Admissions() {
             <button
               class="primary"
               onClick={() =>
+                confirm(`Mark these ${batch.rows.length} student(s) as admitted today, with payment deadline ${batch.paymentDeadline}?`) &&
                 run(async () => {
                   await repo.markAdmitted(batch.rows.map((r) => r.ID), today, batch.paymentDeadline);
                   setBatch(null);

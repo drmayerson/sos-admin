@@ -59,7 +59,12 @@ function DormRow({ n, a, cfg }: { n: number; a: Row; cfg: SeasonConfig }) {
           <summary class="small">Withdraw…</summary>
           <div class="row">
             <input value={reason} onInput={(e) => setReason((e.target as HTMLInputElement).value)} />
-            <button disabled={!reason.trim()} onClick={() => run(() => repo.withdraw(id, reason), `${id} withdrawn.`)}>Withdraw</button>
+            <button
+              disabled={!reason.trim()}
+              onClick={() => confirm(`Are you sure you want to withdraw (unenroll) ${id}?`) && run(() => repo.withdraw(id, reason), `${id} withdrawn.`)}
+            >
+              Withdraw
+            </button>
           </div>
         </details>
       </td>

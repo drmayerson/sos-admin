@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { isActive } from '../../core/assign';
+import { isActive, stageOf } from '../../core/assign';
 import { decodeUtf8, parseCsv } from '../../core/csv';
+import { addDays } from '../../core/admission';
 import { awaitingPayment, effectiveDeadline, isOverdue, REMINDER_COLUMNS, reminderRows } from '../../core/deadlines';
 import { parseAmount } from '../../core/fees';
 import { field } from '../../core/flags';
@@ -115,8 +116,11 @@ export function PaymentMatch() {
     <div>
       <h1>Match payments</h1>
       <p>
-        Payments the app couldn't link with certainty. Click a suggestion, or search any application. A transfer that pays for
-        both sessions can be linked to both applications. Identical repeat submissions are listed so you can confirm them.
+        How payments are linked automatically: (1) the e-mail on the payment form equals the student's or the parent's
+        e-mail of exactly one application; (2) otherwise the name equals one student's or parent's name (same words; accents,
+        case and order ignored). Listed here are the rest: unknown e-mail and a name that differs or is shared (siblings,
+        two-session students). Compare with "details", pick, and link. A transfer that pays for both sessions can be linked to
+        both applications. Identical repeat submissions are listed so you can confirm them.
       </p>
       <label><input type="checkbox" checked={showAll} onChange={() => setShowAll(!showAll)} /> Show all payments ({pays.length})</label>
       {list.length === 0 && <p class="muted">Nothing to match.</p>}
@@ -159,6 +163,7 @@ function MatchCard({ p, cfg }: { p: Row; cfg: SeasonConfig }) {
           {suggestions.map((s) => (
             <label class="cand">
               <input type="checkbox" checked={picked.includes(s.id)} onChange={() => toggle(s.id)} /> {label(s.id)} <span class="muted small">({s.text.replace(/^\S+ \(|\)$/g, '')})</span>
+              <AppDetails id={s.id} />
             </label>
           ))}
         </div>
@@ -169,6 +174,7 @@ function MatchCard({ p, cfg }: { p: Row; cfg: SeasonConfig }) {
       {found.map((a) => (
         <label class="cand">
           <input type="checkbox" checked={picked.includes(a[APP_COLS.id])} onChange={() => toggle(a[APP_COLS.id])} /> {label(a[APP_COLS.id])}
+          <AppDetails id={a[APP_COLS.id]} />
         </label>
       ))}
       {picked.filter((x) => !suggestions.some((s) => s.id === x) && !found.some((a) => a[APP_COLS.id] === x)).map((x) => (
@@ -184,6 +190,31 @@ function MatchCard({ p, cfg }: { p: Row; cfg: SeasonConfig }) {
         </button>
       </div>
     </div>
+  );
+}
+
+/** Expandable student details next to a match suggestion (to compare with the payer's name and e-mail). */
+function AppDetails({ id }: { id: string }) {
+  const { snap } = useApp();
+  const [open, setOpen] = useState(false);
+  const a = snap.apps.find((x) => x[APP_COLS.id] === id);
+  if (!a || !snap.cfg) return null;
+  const cfg = snap.cfg;
+  return (
+    <span>
+      {' '}
+      <button class="link small" onClick={(e) => { e.preventDefault(); setOpen(!open); }}>{open ? 'hide details' : 'details'}</button>
+      {open && (
+        <table class="kv mini"><tbody>
+          <tr><td>Student e-mail / phone</td><td>{field(a, cfg, 'email')} · {field(a, cfg, 'phone')}</td></tr>
+          <tr><td>Parent</td><td>{field(a, cfg, 'parentName')} · {field(a, cfg, 'parentEmail')} · {field(a, cfg, 'parentPhone')}</td></tr>
+          <tr><td>Address</td><td>{field(a, cfg, 'address')}</td></tr>
+          <tr><td>Session / course</td><td>{a[APP_COLS.session]} · {a[APP_COLS.assignedCourse] || '—'} · {stageOf(a)}</td></tr>
+          <tr><td>Amount due</td><td>{a[APP_COLS.amountDue] || '?'} EUR{a[APP_COLS.paidAt] ? ` · paid ${a[APP_COLS.paidAt]}` : ''}</td></tr>
+          <tr><td>Other applications</td><td>{snap.apps.filter((x) => x[APP_COLS.personKey] === a[APP_COLS.personKey] && x[APP_COLS.id] !== id).map((x) => `${x[APP_COLS.id]} (${x[APP_COLS.session]}, ${x[APP_COLS.status]})`).join(', ') || '—'}</td></tr>
+        </tbody></table>
+      )}
+    </span>
   );
 }
 
@@ -203,7 +234,7 @@ export function Proofs() {
     repo.store.readAll('Payments').then(setPays);
   }, [snap]);
   const todo = (pays ?? []).filter((p) => p[PAY_COLS.status] === 'matched' && (filter === 'all' || !['approved', 'rejected'].includes(p[PAY_COLS.proofStatus])));
-  const pairing = useMemo(() => pairProofFiles(todo.map((p) => ({ id: p[PAY_COLS.paymentId], proofFile: p[PAY_COLS.proofFile] })), files.map((f) => f.name)), [todo.length, files, pays]);
+  const pairing = useMemo(() => pairProofFiles(todo.map((p) => ({ id: p[PAY_COLS.paymentId], proofFile: p[PAY_COLS.proofFile], email: p[PAY_COLS.payerEmail] })), files.map((f) => f.name)), [todo.length, files, pays]);
   if (!snap.cfg || !pays) return <p>Loading…</p>;
   const cfg = snap.cfg;
 
@@ -273,6 +304,7 @@ export function Proofs() {
         {likely.length > 0 && (
           <button
             onClick={() =>
+              confirm(`Approve all ${likely.length} "likely OK" payments (they are marked paid)?`) &&
               run(async () => {
                 for (const p of likely) await repo.approvePayment(p[PAY_COLS.paymentId], 'approved (likely OK)');
               }, `Approved ${likely.length} payment(s).`)
@@ -366,9 +398,11 @@ export function Unpaid() {
   const { snap, repo, run } = useApp();
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [final, setFinal] = useState(false);
+  const [deadline, setDeadline] = useState('');
   if (!snap.cfg) return <p class="warn">Set up the season first.</p>;
   const cfg = snap.cfg;
   const t = today();
+  const dl = deadline || addDays(t, cfg.reminderDays);
   const waiting = snap.apps.filter(awaitingPayment).sort((a, b) => (effectiveDeadline(a) < effectiveDeadline(b) ? -1 : 1));
   const overdue = waiting.filter((a) => isOverdue(a, t));
   const paid = snap.apps.filter((a) => isActive(a) && a[APP_COLS.paidAt]);
@@ -378,8 +412,8 @@ export function Unpaid() {
       <h1>Awaiting payment</h1>
       <p>
         Admitted students who haven't paid yet, earliest deadline first. Select students to download a reminder mail merge, then
-        confirm that you sent it: the new deadline is today + {cfg.reminderDays} days. After a <b>final</b> reminder's deadline the
-        student is flagged for a decision.
+        confirm that you sent it. The new deadline defaults to today + {cfg.reminderDays} days and can be changed below. After a
+        <b> final</b> reminder's deadline the student is flagged for a decision. Students who decide not to come: <b>Unenroll</b>.
       </p>
       <div class="row">
         <button onClick={() => run(async () => { const n = await repo.checkPaymentDeadlines(); return n; }, 'Deadline flags updated.')}>
@@ -390,10 +424,11 @@ export function Unpaid() {
       </div>
       <div class="row">
         <label><input type="checkbox" checked={final} onChange={() => setFinal(!final)} /> final reminder</label>
+        <label>new deadline <input type="date" min={t} value={dl} onInput={(e) => setDeadline((e.target as HTMLInputElement).value)} /></label>
         <button
           disabled={chosen.length === 0}
           onClick={() => {
-            const { rows } = reminderRows(chosen, cfg, t, final);
+            const { rows } = reminderRows(chosen, cfg, t, final, dl);
             downloadXlsx(rows, REMINDER_COLUMNS, 'Reminders', `SOS-${final ? 'final-' : ''}reminders-${t}.xlsx`);
           }}
         >
@@ -403,8 +438,9 @@ export function Unpaid() {
           class="primary"
           disabled={chosen.length === 0}
           onClick={() =>
+            confirm(`Record ${final ? 'a FINAL reminder' : 'a reminder'} for ${chosen.length} student(s), with new deadline ${dl}?`) &&
             run(async () => {
-              await repo.recordReminders(chosen.map((a) => a[APP_COLS.id]), final);
+              await repo.recordReminders(chosen.map((a) => a[APP_COLS.id]), final, dl);
               setSel(new Set());
             }, `${final ? 'Final reminders' : 'Reminders'} recorded for ${chosen.length} student(s).`)
           }
@@ -414,7 +450,7 @@ export function Unpaid() {
       </div>
       <p class="muted small">The reminder Excel contains personal data: delete it after the mail merge.</p>
       <table><tbody>
-        <tr><th /><th>ID</th><th>Name</th><th>Course</th><th>Due</th><th>Admitted</th><th>Deadline</th><th>Reminders</th></tr>
+        <tr><th /><th>ID</th><th>Name</th><th>Course</th><th>Due</th><th>Admitted</th><th>Deadline</th><th>Reminders</th><th /></tr>
         {waiting.map((a) => {
           const id = a[APP_COLS.id];
           const reminders = (a[APP_COLS.reminders] ?? '').split('\n').filter(Boolean);
@@ -428,6 +464,18 @@ export function Unpaid() {
               <td>{a[APP_COLS.admittedAt]}</td>
               <td>{effectiveDeadline(a)}{isOverdue(a, t) && <span class="badge warnb">overdue</span>}{a[APP_COLS.finalReminder] === 'TRUE' && <span class="badge">final</span>}</td>
               <td class="small">{reminders.length ? reminders.join(' · ') : '—'}</td>
+              <td>
+                <button
+                  onClick={() => {
+                    const reason = prompt(`Unenroll ${id} ${fullName(a, cfg)}? Their course place is freed; the record is kept.\n\nReason:`, 'decided not to participate (did not pay)');
+                    if (reason === null || !reason.trim()) return;
+                    if (!confirm(`Are you sure you want to unenroll ${id} ${fullName(a, cfg)}?`)) return;
+                    run(() => repo.withdraw(id, reason.trim()), `${id} unenrolled.`);
+                  }}
+                >
+                  Unenroll…
+                </button>
+              </td>
             </tr>
           );
         })}

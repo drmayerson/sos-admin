@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { isActive, isLocked, priorityCompare, runAssignment, type AssignChange, type AssignResult } from '../../core/assign';
+import { describePrereq } from '../../core/config';
 import { ageOn } from '../../core/dates';
 import { field } from '../../core/flags';
 import { effectiveAccommodation } from '../../core/fees';
@@ -89,7 +90,7 @@ export function Assignment() {
                   <td>{lockedIn(c.code)}</td>
                   <td><LimitInput value={c.limit} max={c.hardMax} onSave={(v) => setLimit(c.code, v)} /></td>
                   <td>{c.softMax} / {c.hardMax}</td>
-                  <td class="small">{c.minAge !== null ? `age ≥ ${c.minAge}` : c.noPrereqs ? 'none' : <span class="err-text">not set</span>}{c.prereqNote && ` · ${c.prereqNote}`}</td>
+                  <td class="small">{describePrereq(c) === 'not set' ? <span class="err-text">not set</span> : describePrereq(c)}</td>
                   <td>
                     {n >= c.limit && <span class="badge warnb">full</span>}
                     {w > 0 && <span class="badge warnb" title="Students on the waitlist who had this course among their options">wanted by {w} on waitlist</span>}
@@ -101,7 +102,7 @@ export function Assignment() {
                     <td colSpan={7} class="roster">
                       {list.length === 0 ? <span class="muted">Nobody assigned.</span> : (
                         <table><tbody>
-                          <tr><th>#</th><th>ID</th><th>Name</th><th>Locked</th><th>FL</th><th>Acc.</th><th>Age on start</th><th>How</th></tr>
+                          <tr><th>#</th><th>ID</th><th>Name</th><th>Locked</th><th>FL</th><th>Acc.</th><th>Age on start</th><th>Years left HS</th><th>How</th></tr>
                           {list.map((a, i) => (
                             <tr>
                               <td>{i + 1}</td>
@@ -111,6 +112,7 @@ export function Assignment() {
                               <td>{a[APP_COLS.flStatus] === 'n.a.' || a[APP_COLS.flStatus] === 'rejected' ? '' : a[APP_COLS.flStatus]}</td>
                               <td>{effectiveAccommodation(a, cfg)}{a[APP_COLS.dormWaiting] === 'TRUE' && ' (no dorm yet)'}</td>
                               <td>{ageOn(field(a, cfg, 'birthDate'), s.startDate) ?? '?'}</td>
+                              <td>{field(a, cfg, 'yearsLeft')}</td>
                               <td class="small">{a[APP_COLS.assignNote]}</td>
                             </tr>
                           ))}
@@ -170,6 +172,10 @@ export function Assignment() {
                   <button
                     class="primary"
                     onClick={() =>
+                      confirm(
+                        `Apply ${preview.changes.length} change(s) to the assignment?` +
+                          (preview.changes.some((c) => c.kind === 'lost') ? `\n\n${preview.changes.filter((c) => c.kind === 'lost').length} student(s) LOSE their place.` : ''),
+                      ) &&
                       run(async () => {
                         const n = await repo.applyAssignment(preview.changes);
                         setPreview(null);

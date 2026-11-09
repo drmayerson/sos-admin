@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { validateConfig } from '../../core/config';
 import { decodeUtf8, parseCsv } from '../../core/csv';
 import { checkMapping, type MappingCheck } from '../../core/headers';
-import { FIELD_KEYS, type Accommodation, type FieldKey, type SeasonConfig } from '../../core/types';
+import { FIELD_KEYS, type Accommodation, type FieldKey, type PrereqMode, type SeasonConfig } from '../../core/types';
 import { useApp } from '../ctx';
 
 const ACC: Accommodation[] = ['FULL', 'EVENING', 'DAY'];
@@ -46,7 +46,8 @@ export function Setup() {
         <div class="fields">
           <label>Season{txt(c.season, (v) => upd((x) => (x.season = v)))}</label>
           <label>Application ID prefix{txt(c.idPrefix, (v) => upd((x) => (x.idPrefix = v)))}</label>
-          <label>Payment deadline (days after admission){num(c.paymentDeadlineDays, (v) => upd((x) => (x.paymentDeadlineDays = v)))}</label>
+          <label>Payment deadline (default days after admission){num(c.paymentDeadlineDays, (v) => upd((x) => (x.paymentDeadlineDays = v)))}</label>
+          <label>Reminder deadline (default days after a reminder){num(c.reminderDays, (v) => upd((x) => (x.reminderDays = v)))}</label>
           <label class="span2">"I am a" answer meaning Flemish status{txt(c.flemishStatusValue, (v) => upd((x) => (x.flemishStatusValue = v)), 'wide')}</label>
         </div>
       </div>
@@ -70,7 +71,7 @@ export function Setup() {
       <div class="panel">
         <h2>Courses</h2>
         <table><tbody>
-          <tr><th>Session</th><th>Code (as in the form)</th><th>Soft max</th><th>Hard max</th><th>Min. age on start</th><th>No prerequisites</th><th>Prerequisite note</th><th /></tr>
+          <tr><th>Session</th><th>Code (as in the form)</th><th>Soft max</th><th>Hard max</th><th /></tr>
           {c.courses.map((k, i) => (
             <tr>
               <td>
@@ -81,39 +82,85 @@ export function Setup() {
               <td>{txt(k.code, (v) => upd((x) => (x.courses[i].code = v.trim())))}</td>
               <td>{num(k.softMax, (v) => upd((x) => { if (x.courses[i].limit === x.courses[i].softMax) x.courses[i].limit = v; x.courses[i].softMax = v; }))}</td>
               <td>{num(k.hardMax, (v) => upd((x) => (x.courses[i].hardMax = v)))}</td>
-              <td>
-                <input
-                  type="number"
-                  style={{ width: '4.5em' }}
-                  value={k.minAge ?? ''}
-                  onInput={(e) => {
-                    const v = (e.target as HTMLInputElement).value;
-                    upd((x) => {
-                      x.courses[i].minAge = v === '' ? null : Number(v);
-                      if (v !== '') x.courses[i].noPrereqs = false;
-                    });
-                  }}
-                />
-              </td>
-              <td>
-                <input
-                  type="checkbox"
-                  checked={k.noPrereqs}
-                  disabled={k.minAge !== null}
-                  onChange={() => upd((x) => (x.courses[i].noPrereqs = !x.courses[i].noPrereqs))}
-                />
-              </td>
-              <td>{txt(k.prereqNote, (v) => upd((x) => (x.courses[i].prereqNote = v)))}</td>
               <td><button onClick={() => upd((x) => x.courses.splice(i, 1))}>Remove</button></td>
             </tr>
           ))}
         </tbody></table>
-        <p class="muted small">
-          Every course needs a minimum age or the "no prerequisites" tick before assignment can run. A student marked OK for a
-          course on the Young students screen is allowed in regardless of the minimum age. The current limit (soft max at first)
-          is changed on the Assign courses screen.
+        <p class="muted small">The current limit (soft max at first) is changed on the Assign courses screen.</p>
+        <button
+          onClick={() =>
+            upd((x) =>
+              x.courses.push({ session: x.sessions[0].key, code: '', softMax: 12, hardMax: 14, limit: 12, minAge: null, maxAge: null, yearsLeft: [], prereqMode: 'hard', noPrereqs: false, prereqNote: '' }),
+            )
+          }
+        >
+          Add course
+        </button>
+      </div>
+
+      <div class="panel">
+        <h2>Prerequisites</h2>
+        <p class="small">
+          Per course, a rule on the student's <b>age on the session start date</b> (min/max) and/or their answer to <b>"years left
+          until you graduate high school"</b> — or tick "no prerequisites". Assignment can't run while a course has neither.
+          A student marked OK for a course (Young students screen) is always allowed in. Write the rule in normal language in
+          the note and let Claude propose it: <a href="#/prereq">LLM helper – prerequisites</a>.
         </p>
-        <button onClick={() => upd((x) => x.courses.push({ session: x.sessions[0].key, code: '', softMax: 12, hardMax: 14, limit: 12, minAge: null, noPrereqs: false, prereqNote: '' }))}>Add course</button>
+        <table><tbody>
+          <tr><th>Course</th><th>Min age</th><th>Max age</th><th>Years left allowed</th><th>If not met</th><th>No prerequisites</th><th>Note (normal language)</th></tr>
+          {c.courses.map((k, i) => {
+            const ageInput = (v: number | null, set: (n: number | null) => void) => (
+              <input
+                type="number"
+                style={{ width: '4.5em' }}
+                value={v ?? ''}
+                onInput={(e) => {
+                  const t = (e.target as HTMLInputElement).value;
+                  set(t === '' ? null : Number(t));
+                }}
+              />
+            );
+            const hasRule = k.minAge !== null || k.maxAge !== null || k.yearsLeft.length > 0;
+            return (
+              <tr>
+                <td>{k.session} {k.code}</td>
+                <td>{ageInput(k.minAge, (n) => upd((x) => { x.courses[i].minAge = n; if (n !== null) x.courses[i].noPrereqs = false; }))}</td>
+                <td>{ageInput(k.maxAge, (n) => upd((x) => { x.courses[i].maxAge = n; if (n !== null) x.courses[i].noPrereqs = false; }))}</td>
+                <td class="nowrap">
+                  {['0', '1', '2', '>2'].map((y) => (
+                    <label class="chip">
+                      <input
+                        type="checkbox"
+                        checked={k.yearsLeft.includes(y)}
+                        onChange={() =>
+                          upd((x) => {
+                            const cur = x.courses[i].yearsLeft;
+                            x.courses[i].yearsLeft = cur.includes(y) ? cur.filter((z) => z !== y) : ['0', '1', '2', '>2'].filter((z) => z === y || cur.includes(z));
+                            if (x.courses[i].yearsLeft.length) x.courses[i].noPrereqs = false;
+                          })
+                        }
+                      />{' '}
+                      {y}
+                    </label>
+                  ))}
+                </td>
+                <td>
+                  <select disabled={!hasRule} value={k.prereqMode} onChange={(e) => upd((x) => (x.courses[i].prereqMode = (e.target as HTMLSelectElement).value as PrereqMode))}>
+                    <option value="hard">not allowed (hard)</option>
+                    <option value="soft-priority">allowed, lower priority</option>
+                    <option value="soft-flag">allowed, but flagged</option>
+                  </select>
+                </td>
+                <td><input type="checkbox" checked={k.noPrereqs} disabled={hasRule} onChange={() => upd((x) => (x.courses[i].noPrereqs = !x.courses[i].noPrereqs))} /></td>
+                <td>{txt(k.prereqNote, (v) => upd((x) => (x.courses[i].prereqNote = v)), 'wide')}</td>
+              </tr>
+            );
+          })}
+        </tbody></table>
+        <p class="muted small">
+          <b>Lower priority</b>: students who don't meet the rule are placed in that course only after everyone else has been
+          placed (they keep their preference order). <b>Flagged</b>: they're placed as usual and get a PREREQ_SOFT flag to review.
+        </p>
       </div>
 
       <div class="panel">

@@ -45,8 +45,8 @@ export const REMINDER_COLUMNS = [
 ] as const;
 
 /** Mail-merge rows for payment reminders. */
-export function reminderRows(apps: Row[], cfg: SeasonConfig, today: string, final: boolean) {
-  const newDeadline = addDays(today, cfg.reminderDays);
+export function reminderRows(apps: Row[], cfg: SeasonConfig, today: string, final: boolean, deadline?: string) {
+  const newDeadline = deadline || addDays(today, cfg.reminderDays);
   return {
     newDeadline,
     rows: apps.map((a) => {

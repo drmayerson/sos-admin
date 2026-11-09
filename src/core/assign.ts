@@ -1,8 +1,8 @@
-import { coursesMissingPrereqs } from './config';
+import { coursesMissingPrereqs, hasPrereqRule } from './config';
 import { ageOn } from './dates';
 import { countsAsFlemish, effectiveAccommodation } from './fees';
 import { field } from './flags';
-import { APP_COLS, FLAG_COLS, type CourseConfig, type Row, type SeasonConfig } from './types';
+import { APP_COLS, FLAG_COLS, type CourseConfig, type PrereqMode, type Row, type SeasonConfig } from './types';
 import { courseDecisions } from './young';
 
 export interface Placement {
@@ -43,14 +43,26 @@ export function priorityCompare(a: Row, b: Row): number {
   return a[APP_COLS.id] < b[APP_COLS.id] ? -1 : a[APP_COLS.id] > b[APP_COLS.id] ? 1 : 0;
 }
 
-/** Whether the student meets the course's prerequisites. A human "OK" for the course overrides. */
-export function meetsPrereqs(app: Row, course: CourseConfig, cfg: SeasonConfig): { ok: boolean; why: string } {
-  if (courseDecisions(app)[course.code] === 'OK') return { ok: true, why: '' };
-  if (course.minAge === null) return { ok: true, why: '' };
-  const start = cfg.sessions.find((s) => s.key === course.session)?.startDate ?? '';
-  const age = ageOn(field(app, cfg, 'birthDate'), start);
-  if (age === null) return { ok: false, why: `${course.code}: birth date unreadable, minimum age ${course.minAge}` };
-  return age >= course.minAge ? { ok: true, why: '' } : { ok: false, why: `${course.code}: age ${age} < minimum ${course.minAge}` };
+/**
+ * Whether the student meets the course's prerequisite rule (age range and/or "years left" values).
+ * A human "OK" for the course overrides. `mode` tells how a failure counts (hard / soft-priority / soft-flag).
+ */
+export function meetsPrereqs(app: Row, course: CourseConfig, cfg: SeasonConfig): { ok: boolean; why: string; mode: PrereqMode } {
+  const mode = course.prereqMode;
+  if (courseDecisions(app)[course.code] === 'OK' || !hasPrereqRule(course)) return { ok: true, why: '', mode };
+  const why: string[] = [];
+  if (course.minAge !== null || course.maxAge !== null) {
+    const start = cfg.sessions.find((s) => s.key === course.session)?.startDate ?? '';
+    const age = ageOn(field(app, cfg, 'birthDate'), start);
+    if (age === null) why.push('birth date unreadable');
+    else {
+      if (course.minAge !== null && age < course.minAge) why.push(`age ${age} < ${course.minAge}`);
+      if (course.maxAge !== null && age > course.maxAge) why.push(`age ${age} > ${course.maxAge}`);
+    }
+  }
+  const yl = field(app, cfg, 'yearsLeft').trim();
+  if (course.yearsLeft.length && !course.yearsLeft.includes(yl)) why.push(`years left ${yl || '?'} not in ${course.yearsLeft.join('/')}`);
+  return { ok: why.length === 0, why: why.length ? `${course.code}: ${why.join(', ')}` : '', mode };
 }
 
 /**
@@ -77,7 +89,7 @@ export function runAssignment(apps: Row[], cfg: SeasonConfig): AssignResult {
   const res: AssignResult = { errors: [], warnings: [], placements: new Map(), courses: [], dorms: [] };
   const missing = coursesMissingPrereqs(cfg);
   if (missing.length)
-    res.errors.push(`Enter a prerequisite (minimum age) or tick "no prerequisites" for: ${missing.join(', ')} (Season setup).`);
+    res.errors.push(`Enter a prerequisite rule or tick "no prerequisites" for: ${missing.join(', ')} (Season setup).`);
   if (res.errors.length) return res;
 
   for (const session of cfg.sessions) {
@@ -98,26 +110,31 @@ export function runAssignment(apps: Row[], cfg: SeasonConfig): AssignResult {
       });
     }
 
-    // 2. Everyone else in priority order.
-    for (const a of students) {
-      if (res.placements.has(a[APP_COLS.id])) continue;
+    // 2. Everyone else in priority order. Two passes: in pass 1 a student whose best remaining option is a
+    //    course with a *soft-priority* rule they don't meet is deferred; pass 2 places the deferred students
+    //    (again in priority order) with that course allowed. So students meeting the rule go first.
+    const deferred: Row[] = [];
+    const place = (a: Row, pass: 1 | 2): boolean => {
       const tried: string[] = [];
       const skipped: string[] = [];
+      const soft: string[] = [];
       let placed = '';
       let note = '';
       const choices = [a[APP_COLS.choice1], a[APP_COLS.choice2], a[APP_COLS.choice3]];
       for (const code of candidateCourses(a, cfg)) {
         const course = courses.find((c) => c.code === code)!;
         const pre = meetsPrereqs(a, course, cfg);
-        if (!pre.ok) {
+        if (!pre.ok && pre.mode === 'hard') {
           skipped.push(pre.why);
           continue;
         }
+        if (!pre.ok && pre.mode === 'soft-priority' && pass === 1) return false; // defer to pass 2
         tried.push(code);
         if (count.get(code)! < course.limit) {
           placed = code;
           const i = choices.indexOf(code);
           note = i >= 0 ? ORDINAL[i] : 'course marked OK (not among choices)';
+          if (!pre.ok) soft.push(pre.mode === 'soft-flag' ? `soft prerequisite not met — ${pre.why}` : `placed after students meeting the prerequisite — ${pre.why}`);
           break;
         }
       }
@@ -127,8 +144,11 @@ export function runAssignment(apps: Row[], cfg: SeasonConfig): AssignResult {
         const parts = [tried.length ? `full: ${tried.join(', ')}` : 'no eligible course', ...skipped];
         note = `waitlist (${parts.join('; ')})`;
       }
-      res.placements.set(a[APP_COLS.id], { course: placed, dormWaiting: false, note });
-    }
+      res.placements.set(a[APP_COLS.id], { course: placed, dormWaiting: false, note: soft.length ? `${note}; ${soft.join('; ')}` : note });
+      return true;
+    };
+    for (const a of students) if (!res.placements.has(a[APP_COLS.id]) && !place(a, 1)) deferred.push(a);
+    for (const a of deferred) place(a, 2);
 
     // 3. Dorm places for FULL students with a course: locked first, then priority order.
     const needDorm = students.filter((a) => effectiveAccommodation(a, cfg) === 'FULL' && res.placements.get(a[APP_COLS.id])!.course);
@@ -195,4 +215,16 @@ export function lockBlockers(app: Row, flags: Row[]): string[] {
   if (flags.some((f) => f[FLAG_COLS.appId] === app[APP_COLS.id] && f[FLAG_COLS.type] === 'YOUNG' && f[FLAG_COLS.status] === 'open'))
     w.push('young-student flag still open');
   return w;
+}
+
+/** Where an application stands, for lists: withdrawn/merged, paid, admitted, locked, assigned, waitlist, not assigned yet. */
+export function stageOf(a: Row): string {
+  const st = a[APP_COLS.status] || 'active';
+  if (st !== 'active') return st;
+  if (a[APP_COLS.paidAt]) return 'paid';
+  if (a[APP_COLS.admittedAt]) return 'admitted';
+  if (isLocked(a)) return 'locked';
+  if (a[APP_COLS.assignedCourse]) return a[APP_COLS.dormWaiting] === 'TRUE' ? 'assigned (no dorm yet)' : 'assigned';
+  if ((a[APP_COLS.assignNote] ?? '').startsWith('waitlist')) return 'waitlist';
+  return 'not assigned yet';
 }

@@ -69,7 +69,7 @@ describe('assignment algorithm', () => {
     await repo.updateApplication(id, { [c.columnMap.s2c1]: 'RELATIVITY', [c.columnMap.s2c2]: '', [c.columnMap.s2c3]: '' });
     let r = runAssignment(await apps(repo), c);
     expect(r.placements.get(id)!.course).toBe('');
-    expect(r.placements.get(id)!.note).toMatch(/RELATIVITY: age 15 < minimum 16/);
+    expect(r.placements.get(id)!.note).toMatch(/RELATIVITY: age 15 < 16/);
     await repo.setCourseDecisions(id, { RELATIVITY: 'OK' });
     r = runAssignment(await apps(repo), c);
     expect(r.placements.get(id)!.course).toBe('RELATIVITY');

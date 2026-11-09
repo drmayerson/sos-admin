@@ -13,10 +13,15 @@ import { APP_COLS, PAY_COLS, type Row, type SeasonConfig } from '../core/types';
 
 export function createDemoRepo(): Repo {
   const cfg = configFromJson(cfgJson as ConfigJson);
-  // Demo prerequisites so assignment can run: RELATIVITY needs age 16, the others have none.
+  // Demo prerequisites so assignment can run: RELATIVITY needs age 16 (hard); ASTROPLASMA prefers students with 0-1 years
+  // left (soft, lower priority); the others have none.
   for (const c of cfg.courses) {
     if (c.code === 'RELATIVITY') c.minAge = 16;
-    else c.noPrereqs = true;
+    else if (c.code === 'ASTROPLASMA') {
+      c.yearsLeft = ['0', '1'];
+      c.prereqMode = 'soft-priority';
+      c.prereqNote = 'student moet minstens in vijfde middelbaar zitten (HS years left 1 or 0)';
+    } else c.noPrereqs = true;
   }
   const t = configToTables(cfg);
   const store = new MemoryTableStore('Demo (synthetic data, not saved)', t);
@@ -61,7 +66,8 @@ export async function makeDemoProofs(pays: Row[], apps: Row[], cfg: SeasonConfig
     lines.forEach((l, i) => g.fillText(l, 36, 60 + i * 58));
     const blob = await c.convertToBlob({ type: 'image/png' });
     // Keep the exact proof file name (so pairing works); the content is a PNG image either way.
-    const name = p[PAY_COLS.proofFile] || `${p[PAY_COLS.paymentId]}.png`;
+    // Recommended naming when saving the e-mail attachments: "<payer e-mail>__<original file name>".
+    const name = `${p[PAY_COLS.payerEmail].trim().toLowerCase()}__${p[PAY_COLS.proofFile] || `${p[PAY_COLS.paymentId]}.png`}`;
     files.push(new File([blob], name, { type: 'image/png' }));
   }
   return files;

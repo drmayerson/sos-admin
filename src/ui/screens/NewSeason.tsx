@@ -7,7 +7,7 @@ import { useApp } from '../ctx';
 const CHECKLIST = [
   'Payment form: change the e-mail label to "E-mail address used in the application (student or parent)".',
   'Payment form: add "This payment is for: Session I / Session II / both sessions" (the app reads it automatically).',
-  'Proof-of-payment files: make sure the attachments of the payment-form e-mails are saved to one folder (e.g. a Power Automate flow).',
+  'Proof-of-payment files: save the attachments of the payment-form e-mails to one folder, named "<payer e-mail>__<original name>" (e.g. a Power Automate flow).',
   'Application form: update course codes in both session dropdowns, session dates, the "2025-2026" / "July 2026" texts, the deadline and the "(almost) full" list.',
   'In the new Sheet: check Season setup (session labels and dates, courses, capacities, dorm places, fees, thresholds) and enter prerequisites for every course.',
   'With the first export of the new season: check the column mapping (Season setup → "check against CSV").',

@@ -185,6 +185,17 @@ export class Repo {
         return { id: a[APP_COLS.id], values: { [APP_COLS.assignedCourse]: p.course, [APP_COLS.dormWaiting]: p.dormWaiting ? 'TRUE' : '', [APP_COLS.assignNote]: p.note } };
       });
     await this.bulkUpdate(updates, 'assignment run');
+    // Soft prerequisites of type "flag": keep one open PREREQ_SOFT flag per affected student, close stale ones.
+    const softFlags = (await this.store.readAll('Flags')).filter((f) => f[FLAG_COLS.type] === 'PREREQ_SOFT' && f[FLAG_COLS.status] === 'open');
+    const need = [...result.placements.entries()].filter(([, p]) => p.note.includes('soft prerequisite not met'));
+    for (const f of softFlags)
+      if (!need.some(([id, p]) => id === f[FLAG_COLS.appId] && f[FLAG_COLS.detail].startsWith(`${p.course}:`)))
+        await this.setFlagStatus(f[FLAG_COLS.flagId], 'resolved', 'no longer applies after re-assignment', 'assignment run');
+    await this.addFlags(
+      need
+        .filter(([id, p]) => !softFlags.some((f) => f[FLAG_COLS.appId] === id && f[FLAG_COLS.detail].startsWith(`${p.course}:`)))
+        .map(([id, p]) => ({ appId: id, type: 'PREREQ_SOFT' as const, detail: `${p.course}: ${p.note.replace(/^.*soft prerequisite not met — /, '').replace(/^[A-Z0-9]+: /, '')} (soft prerequisite)` })),
+    );
     const flags = await this.store.readAll('Flags');
     for (const f of flags) {
       // Only flags closed with the young-student "OK" button (approved); auto-resolved ones stay closed.
@@ -350,12 +361,13 @@ export class Repo {
     await this.bulkUpdate([{ id: appId, values: { [APP_COLS.paidAt]: '' } }], `unmark paid: ${reason}`);
   }
 
-  /** Record that payment reminders were sent; sets the new deadline (today + reminder days). */
-  async recordReminders(appIds: string[], final: boolean): Promise<string> {
+  /** Record that payment reminders were sent; sets the new deadline (given, or today + reminder days). */
+  async recordReminders(appIds: string[], final: boolean, newDeadline?: string): Promise<string> {
     const cfg = await this.requireConfig();
     const apps = await this.store.readAll('Applications');
     const today = this.clock().slice(0, 10);
-    const deadline = addDays(today, cfg.reminderDays);
+    const deadline = newDeadline || addDays(today, cfg.reminderDays);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(deadline) || deadline < today) throw new Error(`The new deadline ${deadline} must be a date from today on.`);
     await this.bulkUpdate(
       appIds.map((id) => {
         const a = apps.find((x) => x[APP_COLS.id] === id);
@@ -419,6 +431,24 @@ export class Repo {
     const ids = apps.filter((a) => isActive(a) && a[APP_COLS.flStatus] === 'claimed' && fold(field(a, cfg, 'school')) === fold(school)).map((a) => a[APP_COLS.id]);
     await this.bulkUpdate(ids.map((id) => ({ id, values: { [APP_COLS.flStatus]: verdict === 'Flemish' ? 'confirmed' : 'rejected' } })), `Flemish school check: ${verdict}`);
     return ids.length;
+  }
+
+  /**
+   * Agree with Claude on every school it judged "Flemish" that has no verdict yet: confirm them all and decide
+   * their claimed students in one batch. "not Flemish" (contested) and "unclear" stay for a human.
+   */
+  async acceptSuggestedFlemish(): Promise<{ schools: number; students: number }> {
+    const cfg = await this.requireConfig();
+    const schools = (await this.store.readAll('Schools')).filter((s) => s.Suggested === 'Flemish' && !s.Verdict);
+    if (schools.length === 0) return { schools: 0, students: 0 };
+    const now = this.clock();
+    await this.store.update('Schools', 'School', schools.map((s) => ({ key: s.School, values: { Verdict: 'Flemish', ConfirmedBy: `${this.user} (agreed with Claude)`, ConfirmedAt: now } })));
+    await this.store.append('AuditLog', [this.entry('', 'Schools', '', `${schools.length} school(s) confirmed Flemish (agreed with Claude)`, 'FL school check')] as unknown as Row[]);
+    const keys = new Set(schools.map((s) => fold(s.School)));
+    const apps = await this.store.readAll('Applications');
+    const ids = apps.filter((a) => isActive(a) && a[APP_COLS.flStatus] === 'claimed' && keys.has(fold(field(a, cfg, 'school')))).map((a) => a[APP_COLS.id]);
+    await this.bulkUpdate(ids.map((id) => ({ id, values: { [APP_COLS.flStatus]: 'confirmed' } })), 'Flemish school check: Flemish (agreed with Claude)');
+    return { schools: schools.length, students: ids.length };
   }
 
   /** Apply confirmed school verdicts (also from earlier seasons) to students still "claimed". */

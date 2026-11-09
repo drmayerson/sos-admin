@@ -12,6 +12,12 @@ export interface CourseConfig {
   limit: number;
   /** Prerequisite: minimum age on the session start date (null = no age rule). */
   minAge: number | null;
+  /** Prerequisite: maximum age on the session start date (null = none). */
+  maxAge: number | null;
+  /** Prerequisite: allowed answers to "years left until you graduate" (e.g. ["0","1"]); empty = any. */
+  yearsLeft: string[];
+  /** hard = not allowed (unless marked OK); soft-priority = placed after students who meet it; soft-flag = allowed, but flagged. */
+  prereqMode: PrereqMode;
   /** Explicit "this course has no prerequisites" tick. */
   noPrereqs: boolean;
   /** Informational free text (e.g. "basic programming"). */
@@ -28,6 +34,7 @@ export interface SessionConfig {
 }
 
 export type Accommodation = 'FULL' | 'EVENING' | 'DAY';
+export type PrereqMode = 'hard' | 'soft-priority' | 'soft-flag';
 
 export interface SeasonConfig {
   season: string;
@@ -131,7 +138,7 @@ export type FLStatus = 'claimed' | 'confirmed' | 'rejected' | 'n.a.';
 
 export const FLAG_TYPES = [
   'NO_COURSE_CHOSEN', 'UNKNOWN_COURSE', 'UNKNOWN_SESSION', 'BAD_BIRTH_DATE', 'YOUNG', 'TOO_OLD', 'SHORT_MOTIVATION',
-  'NEAR_DUPLICATE', 'PAYMENT_OVERDUE', 'FINAL_DEADLINE_PASSED', 'MOTIVATION_LLM', 'FL_SCHOOL',
+  'NEAR_DUPLICATE', 'PAYMENT_OVERDUE', 'FINAL_DEADLINE_PASSED', 'MOTIVATION_LLM', 'FL_SCHOOL', 'PREREQ_SOFT',
 ] as const;
 export type FlagType = (typeof FLAG_TYPES)[number];
 

@@ -1,5 +1,5 @@
 import { COLUMN_MAP_2026, normHeader } from './headers';
-import { FIELD_KEYS, type Accommodation, type FieldKey, type Row, type SeasonConfig } from './types';
+import { FIELD_KEYS, type Accommodation, type CourseConfig, type FieldKey, type PrereqMode, type Row, type SeasonConfig } from './types';
 
 /** Shape of test-data/config_2026_synthetic.json (and of a season-config export). */
 export interface ConfigJson {
@@ -20,12 +20,12 @@ export function configFromJson(j: ConfigJson): SeasonConfig {
     idPrefix: j.idPrefix,
     sessions: j.sessions.map((s) => ({ key: s.key, label: s.label, startDate: s.startDate, dormCapacity: s.dormCapacity })),
     courses: j.sessions.flatMap((s) =>
-      s.courses.map((c) => ({ session: s.key, ...c, limit: c.softMax, minAge: null, noPrereqs: false, prereqNote: '' })),
+      s.courses.map((c) => ({ session: s.key, ...c, limit: c.softMax, minAge: null, maxAge: null, yearsLeft: [], prereqMode: 'hard' as const, noPrereqs: false, prereqNote: '' })),
     ),
     fees: structuredClone(j.fees),
     thresholds: { ...j.thresholds },
     paymentDeadlineDays: j.paymentDeadlineDays,
-    reminderDays: 7,
+    reminderDays: 14,
     paymentReference: j.payment?.structuredReference ?? '+++400/0029/31560+++',
     paymentIban: j.payment?.iban ?? 'BE60 7340 0666 0370',
     columnMap: { ...COLUMN_MAP_2026 },
@@ -74,6 +74,9 @@ export function configToTables(c: SeasonConfig): ConfigTables {
       HardMax: String(x.hardMax),
       Limit: String(x.limit),
       MinAge: x.minAge === null ? '' : String(x.minAge),
+      MaxAge: x.maxAge === null ? '' : String(x.maxAge),
+      YearsLeftAllowed: x.yearsLeft.join(', '),
+      PrerequisiteMode: x.prereqMode,
       NoPrerequisites: x.noPrereqs ? 'TRUE' : '',
       PrerequisiteNote: x.prereqNote,
     })),
@@ -93,7 +96,7 @@ export function configFromTables(t: ConfigTables): SeasonConfig {
     season: kv.get('season') ?? '',
     idPrefix: kv.get('idPrefix') ?? 'SOS',
     paymentDeadlineDays: num('paymentDeadlineDays'),
-    reminderDays: kv.has('reminderDays') ? num('reminderDays') : 7,
+    reminderDays: kv.has('reminderDays') ? num('reminderDays') : 14,
     paymentReference: kv.get('paymentReference') ?? '+++400/0029/31560+++',
     paymentIban: kv.get('paymentIban') ?? 'BE60 7340 0666 0370',
     flemishStatusValue: kv.get('flemishStatusValue') ?? FLEMISH_STATUS_2026,
@@ -114,6 +117,9 @@ export function configFromTables(t: ConfigTables): SeasonConfig {
       hardMax: Number(r.HardMax),
       limit: r.Limit ? Number(r.Limit) : Number(r.SoftMax),
       minAge: (r.MinAge ?? '').trim() === '' ? null : Number(r.MinAge),
+      maxAge: (r.MaxAge ?? '').trim() === '' ? null : Number(r.MaxAge),
+      yearsLeft: (r.YearsLeftAllowed ?? '').split(',').map((v) => v.trim()).filter(Boolean),
+      prereqMode: (['hard', 'soft-priority', 'soft-flag'].includes(r.PrerequisiteMode) ? r.PrerequisiteMode : 'hard') as PrereqMode,
       noPrereqs: r.NoPrerequisites === 'TRUE',
       prereqNote: r.PrerequisiteNote ?? '',
     })),
@@ -141,6 +147,8 @@ export function validateConfig(c: SeasonConfig): string[] {
     if (!(x.softMax > 0 && x.hardMax >= x.softMax)) errs.push(`Course ${x.code}: need 0 < soft max ≤ hard max.`);
     if (!(x.limit > 0 && x.limit <= x.hardMax)) errs.push(`Course ${x.code}: current limit must be between 1 and the hard max.`);
     if (x.minAge !== null && !(x.minAge > 0 && x.minAge < 30)) errs.push(`Course ${x.code}: minimum age looks wrong.`);
+    if (x.maxAge !== null && !(x.maxAge > 0 && x.maxAge < 30)) errs.push(`Course ${x.code}: maximum age looks wrong.`);
+    if (x.minAge !== null && x.maxAge !== null && x.minAge > x.maxAge) errs.push(`Course ${x.code}: minimum age is above the maximum age.`);
   }
   return errs;
 }
@@ -163,7 +171,22 @@ export function choiceFields(c: SeasonConfig): Record<string, [FieldKey, FieldKe
 
 /** Courses with neither a prerequisite rule nor an explicit "no prerequisites" tick (assignment refuses to run). */
 export function coursesMissingPrereqs(c: SeasonConfig): string[] {
-  return c.courses.filter((x) => x.minAge === null && !x.noPrereqs).map((x) => x.code);
+  return c.courses.filter((x) => !hasPrereqRule(x) && !x.noPrereqs).map((x) => x.code);
+}
+
+export function hasPrereqRule(x: CourseConfig): boolean {
+  return x.minAge !== null || x.maxAge !== null || x.yearsLeft.length > 0;
+}
+
+/** Human-readable prerequisite, e.g. "age ≥ 16, years left 0/1 (soft: flag)". */
+export function describePrereq(x: CourseConfig): string {
+  if (!hasPrereqRule(x)) return x.noPrereqs ? 'none' : 'not set';
+  const parts: string[] = [];
+  if (x.minAge !== null) parts.push(`age ≥ ${x.minAge}`);
+  if (x.maxAge !== null) parts.push(`age ≤ ${x.maxAge}`);
+  if (x.yearsLeft.length) parts.push(`years left ${x.yearsLeft.join('/')}`);
+  const mode = x.prereqMode === 'hard' ? '' : x.prereqMode === 'soft-priority' ? ' (soft: lower priority)' : ' (soft: flag)';
+  return parts.join(', ') + mode;
 }
 
 /** Settings for the next season, carried over from this one: column mapping, courses, prerequisites, fees, thresholds.

@@ -120,3 +120,5 @@ label.cand { display: block; padding: 2px 0; }
 img.proof { max-width: 420px; max-height: 300px; display: block; margin-top: 4px; border: 1px solid var(--line); }
 .demo-banner.archived { background: #8a5a00; }
 pre.sample { background: #f3f6fa; padding: 8px; white-space: pre-wrap; font-size: 0.8rem; max-height: 300px; overflow: auto; }
+table.kv.mini { font-size: 0.8rem; margin: 2px 0 6px 24px; }
+.detail-nav { position: sticky; top: 0; background: var(--bg); z-index: 3; padding: 6px 0; border-bottom: 1px solid var(--line); }

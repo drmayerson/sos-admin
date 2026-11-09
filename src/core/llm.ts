@@ -6,7 +6,7 @@
 import { isActive } from './assign';
 import { field } from './flags';
 import { collapseWs, fold, stripAccents } from './text';
-import { APP_COLS, type Row, type SeasonConfig } from './types';
+import { APP_COLS, type PrereqMode, type Row, type SeasonConfig } from './types';
 
 // ---------------------------------------------------------------- redaction
 
@@ -108,14 +108,17 @@ const SCHOOL_INSTRUCTIONS = `You get a list of secondary-school names as typed b
 For each, decide whether it is a Flemish school: a Dutch-language school recognised by the Flemish Community, including
 Dutch-language schools in Brussels. French-speaking Belgian schools, international/European schools and schools abroad
 are "not Flemish". If the text doesn't identify one school (e.g. just "middelbare school"), answer "unclear".
-Answer ONLY with JSON: {"task":"fl-school-check","answers":[{"school":"<exactly as given>","verdict":"Flemish"|"not Flemish"|"unclear","officialName":"<if known>","note":"<short reason>"}]}`;
+Give your answer as ONE copyable code block containing only this JSON (no other text inside the block):
+{"task":"fl-school-check","answers":[{"school":"<exactly as given>","verdict":"Flemish"|"not Flemish"|"unclear","officialName":"<if known>","note":"<short reason>"}]}`;
 
 const MOTIVATION_INSTRUCTIONS = `You get anonymised motivation statements of applicants (high-school students, usually 15-18) for a one-week
 science summer school at KU Leuven. Personal details are replaced by placeholders like [STUDENT_NAME]. Flag a statement
 only if: it is very short without an evident reason; it suggests the applicant is not a viable candidate (e.g. already a
 university student, much too young, not interested in science); or it is otherwise questionable (e.g. copied boilerplate,
 inappropriate content). Statements in Dutch or French are fine. Do not flag for spelling or language level.
-Answer ONLY with JSON: {"task":"motivation-check","answers":[{"id":"<id as given>","flag":true|false,"reason":"<one short sentence; empty if not flagged>"}]}`;
+Before answering, ask the user whether they want the answer as a downloadable .json file or as one copyable code block
+(for long lists a file is easier). Either way the content is only this JSON:
+{"task":"motivation-check","answers":[{"id":"<id as given>","flag":true|false,"reason":"<one short sentence; empty if not flagged>"}]}`;
 
 /** Claimed-FL students whose school has no confirmed verdict yet → distinct school strings. */
 export function schoolPacket(apps: Row[], schools: Row[], cfg: SeasonConfig): SchoolPacket {
@@ -179,15 +182,29 @@ export interface PrereqPacket {
 export interface PrereqAnswer {
   course: string;
   minAge: number | null;
+  maxAge?: number | null;
+  /** Allowed answers to "years left until graduating high school": any of "0", "1", "2", ">2"; empty = any. */
+  yearsLeft?: string[];
+  mode?: PrereqMode;
   noPrerequisites: boolean;
   comment: string;
 }
 
-const PREREQ_INSTRUCTIONS = `You get course prerequisites written in free text, for one-week science courses for high-school students.
-The app can only enforce ONE rule: a minimum age on the course's start date. For each course, propose that minimum age
-(an integer) if the text implies one, or noPrerequisites=true if the text implies none. Anything else (e.g. "basic
-programming", "good at maths") can't be enforced automatically: put it in the comment.
-Answer ONLY with JSON: {"task":"prerequisites","answers":[{"course":"<code>","minAge":<integer or null>,"noPrerequisites":true|false,"comment":"<short>"}]}`;
+const PREREQ_INSTRUCTIONS = `You get course prerequisites written in free text (English or Dutch), for one-week science courses for
+high-school students. Translate each into the rule the app can enforce. The app knows, per student:
+- age on the course's start date (whole years) → "minAge" and/or "maxAge" (integers, or null);
+- the answer to "In July, how many full academic years are left until you graduate high school?", one of "0", "1", "2",
+  ">2" → "yearsLeft": the list of allowed answers (empty list = any). Belgian secondary school has 6 years: a student in
+  the 5th year ("vijfde middelbaar") has 1 year left after this school year, in the 6th year 0. "At least in 5th year"
+  therefore means yearsLeft ["0","1"];
+- "mode": "hard" (students not meeting the rule are never placed in the course), "soft-priority" (they may be placed,
+  but only after students who meet it) or "soft-flag" (placed as usual, but flagged for a human). Use "hard" unless the
+  text says it's a preference ("preferably", "bij voorkeur", "ideally"…) → "soft-priority".
+If the text implies no prerequisite, set noPrerequisites=true. Anything else (e.g. "basic programming", "good at maths")
+can't be enforced automatically: mention it in the comment. Prefer the rule the text actually states (e.g. school year)
+over a proxy (e.g. age).
+Give your answer as ONE copyable code block containing only this JSON (no other text inside the block):
+{"task":"prerequisites","answers":[{"course":"<code>","minAge":<integer or null>,"maxAge":<integer or null>,"yearsLeft":[<allowed values>],"mode":"hard"|"soft-priority"|"soft-flag","noPrerequisites":true|false,"comment":"<short>"}]}`;
 
 /** Courses that have a prerequisite note (written in Season setup). No personal data. */
 export function prereqPacket(cfg: SeasonConfig): PrereqPacket {
@@ -199,8 +216,25 @@ export function prereqPacket(cfg: SeasonConfig): PrereqPacket {
   };
 }
 
-export const isPrereqAnswer = (x: unknown): x is PrereqAnswer =>
-  !!x &&
-  typeof (x as PrereqAnswer).course === 'string' &&
-  ((x as PrereqAnswer).minAge === null || Number.isInteger((x as PrereqAnswer).minAge)) &&
-  typeof (x as PrereqAnswer).noPrerequisites === 'boolean';
+export const isPrereqAnswer = (x: unknown): x is PrereqAnswer => {
+  const a = x as PrereqAnswer;
+  const intOrNull = (v: unknown) => v === null || v === undefined || Number.isInteger(v);
+  return (
+    !!x &&
+    typeof a.course === 'string' &&
+    intOrNull(a.minAge) &&
+    intOrNull(a.maxAge) &&
+    (a.yearsLeft === undefined || (Array.isArray(a.yearsLeft) && a.yearsLeft.every((v) => ['0', '1', '2', '>2'].includes(v)))) &&
+    (a.mode === undefined || ['hard', 'soft-priority', 'soft-flag'].includes(a.mode)) &&
+    typeof a.noPrerequisites === 'boolean'
+  );
+};
+
+/** Turn an answer into the course fields to apply. */
+export function prereqFromAnswer(a: PrereqAnswer): { minAge: number | null; maxAge: number | null; yearsLeft: string[]; prereqMode: PrereqMode; noPrereqs: boolean } {
+  const minAge = a.minAge ?? null;
+  const maxAge = a.maxAge ?? null;
+  const yearsLeft = a.yearsLeft ?? [];
+  const has = minAge !== null || maxAge !== null || yearsLeft.length > 0;
+  return { minAge, maxAge, yearsLeft, prereqMode: a.mode ?? 'hard', noPrereqs: !has && a.noPrerequisites };
+}

@@ -1,9 +1,11 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
+import { stageOf } from '../../core/assign';
+import { ageOn } from '../../core/dates';
 import { field } from '../../core/flags';
 import { effectiveAccommodation, feeColumns } from '../../core/fees';
 import { fieldOptions } from '../../core/fieldOptions';
 import { fold } from '../../core/text';
-import { APP_COLS, FLAG_COLS, type FieldKey, type Row } from '../../core/types';
+import { APP_COLS, FLAG_COLS, PAY_COLS, type FieldKey, type Row } from '../../core/types';
 import { choicesText, fmtTime, fullName, useApp } from '../ctx';
 import { AuditTable } from './Audit';
 
@@ -12,6 +14,7 @@ export function Applications() {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('active');
   const [session, setSession] = useState('');
+  const [stage, setStage] = useState('');
   const [limit, setLimit] = useState(100);
   if (!snap.cfg) return <p class="warn">Set up the season first.</p>;
   const cfg = snap.cfg;
@@ -19,10 +22,13 @@ export function Applications() {
   const rows = snap.apps.filter((a) => {
     if (status && a[APP_COLS.status] !== status) return false;
     if (session && a[APP_COLS.session] !== session) return false;
+    if (stage && !stageOf(a).startsWith(stage)) return false;
     if (!needle) return true;
     const hay = fold([a[APP_COLS.id], fullName(a, cfg), field(a, cfg, 'email'), field(a, cfg, 'parentEmail'), field(a, cfg, 'parentName'), field(a, cfg, 'school')].join(' '));
     return hay.includes(needle);
   });
+  // Previous/next in the detail view follow this list (with its filters).
+  navList = rows.map((a) => a[APP_COLS.id]);
   return (
     <div>
       <h1>Applications</h1>
@@ -36,19 +42,25 @@ export function Applications() {
           <option value="">All sessions</option>
           {cfg.sessions.map((s) => <option value={s.key}>{s.key}</option>)}
         </select>
+        <select value={stage} onChange={(e) => setStage((e.target as HTMLSelectElement).value)}>
+          <option value="">All stages</option>
+          {['not assigned yet', 'waitlist', 'assigned', 'locked', 'admitted', 'paid'].map((x) => <option>{x}</option>)}
+        </select>
         <span class="muted">{rows.length} application(s)</span>
+        {rows.length > 0 && <a href={`#/apps/${rows[0][APP_COLS.id]}`} onClick={() => (detailMode = 'full')}>Go through them one by one →</a>}
       </div>
       <table><tbody>
-        <tr><th>ID</th><th>Name</th><th>Session</th><th>Choices</th><th>Acc.</th><th>FL</th><th>Status</th><th>Open flags</th></tr>
+        <tr><th>ID</th><th>Name</th><th>Session</th><th>Choices</th><th>Course</th><th>Stage</th><th>Acc.</th><th>FL</th><th>Open flags</th></tr>
         {rows.slice(0, limit).map((a) => (
           <tr>
             <td><a href={`#/apps/${a[APP_COLS.id]}`}>{a[APP_COLS.id]}</a></td>
             <td>{fullName(a, cfg)}</td>
             <td>{a[APP_COLS.session]}</td>
             <td>{choicesText(a)}</td>
-            <td>{field(a, cfg, 'accommodation')}</td>
+            <td><b>{a[APP_COLS.assignedCourse]}</b></td>
+            <td>{stageOf(a)}</td>
+            <td>{effectiveAccommodation(a, cfg)}</td>
             <td>{a[APP_COLS.flStatus]}</td>
-            <td>{a[APP_COLS.status]}</td>
             <td class="small">{a[APP_COLS.openFlags]}</td>
           </tr>
         ))}
@@ -69,7 +81,152 @@ const GROUPS: [string, FieldKey[]][] = [
 const SENSITIVE: FieldKey[] = ['food', 'medical'];
 const LONG: FieldKey[] = ['motivation', 'address', 'specialRequests', 'remarks', 'previous', 'food', 'medical'];
 
+/** IDs of the last shown Applications list (for previous/next), and the chosen detail mode. */
+let navList: string[] = [];
+let detailMode: 'full' | 'edit' = 'full';
+
 export function ApplicationDetail({ id }: { id: string }) {
+  const { snap } = useApp();
+  const [mode, setModeState] = useState(detailMode);
+  const setMode = (m: 'full' | 'edit') => {
+    detailMode = m;
+    setModeState(m);
+  };
+  const list = navList.includes(id) ? navList : snap.apps.map((a) => a[APP_COLS.id]);
+  const i = list.indexOf(id);
+  const prev = i > 0 ? list[i - 1] : '';
+  const next = i >= 0 && i < list.length - 1 ? list[i + 1] : '';
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+      if (e.key === 'ArrowLeft' && prev) location.hash = `#/apps/${prev}`;
+      if (e.key === 'ArrowRight' && next) location.hash = `#/apps/${next}`;
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [prev, next]);
+  return (
+    <div>
+      <div class="row detail-nav">
+        <a href="#/apps">← Applications</a>
+        <span class="spacer" />
+        <button disabled={!prev} onClick={() => (location.hash = `#/apps/${prev}`)}>‹ Previous</button>
+        <span class="muted small">{i >= 0 ? `${i + 1} of ${list.length}` : ''} (or ← → keys)</span>
+        <button disabled={!next} onClick={() => (location.hash = `#/apps/${next}`)}>Next ›</button>
+        <span class="spacer" />
+        <button class={mode === 'full' ? 'primary' : ''} onClick={() => setMode('full')}>Full view</button>
+        <button class={mode === 'edit' ? 'primary' : ''} onClick={() => setMode('edit')}>Edit</button>
+      </div>
+      {mode === 'full' ? <FullView key={id} id={id} /> : <EditView key={id} id={id} />}
+    </div>
+  );
+}
+
+/** Everything about one student, read-only, on one page. */
+function FullView({ id }: { id: string }) {
+  const { snap, repo } = useApp();
+  const [pays, setPays] = useState<Row[]>([]);
+  useEffect(() => {
+    repo.store.readAll('Payments').then((p) => setPays(p.filter((x) => (x[PAY_COLS.matchedApps] ?? '').split(',').map((y) => y.trim()).includes(id))));
+  }, [id, snap]);
+  const app = snap.apps.find((a) => a[APP_COLS.id] === id);
+  if (!snap.cfg) return <p class="warn">Set up the season first.</p>;
+  if (!app) return <p class="warn">No application {id}.</p>;
+  const cfg = snap.cfg;
+  const flags = snap.flags.filter((f) => f[FLAG_COLS.appId] === id);
+  const history = snap.audit.filter((r) => r.AppID === id).reverse();
+  const formCols = new Set(Object.values(cfg.columnMap));
+  const shownApp = new Set<string>([APP_COLS.id, APP_COLS.status, APP_COLS.openFlags]);
+  const kv = (label: string, value: string | preact.JSX.Element) => <tr><td>{label}</td><td class="pre">{value || <span class="muted">—</span>}</td></tr>;
+  const fv = (k: FieldKey) => kv(cfg.columnMap[k], field(app, cfg, k));
+  const session = cfg.sessions.find((s) => s.key === app[APP_COLS.session]);
+  const age = session ? ageOn(field(app, cfg, 'birthDate'), session.startDate) : null;
+  const fees = feeColumns(app, cfg);
+  return (
+    <div>
+      <h1>
+        {id} — {fullName(app, cfg)} <span class="badge">{stageOf(app)}</span>
+      </h1>
+      <div class="grid2">
+        <div class="panel">
+          <h2>Overview</h2>
+          <table class="kv"><tbody>
+            {kv('Posted', fmtTime(app[APP_COLS.postingUTC]))}
+            {kv('Session', session?.label ?? app[APP_COLS.session])}
+            {kv('Choices', choicesText(app))}
+            {kv('Assigned course', <b>{app[APP_COLS.assignedCourse]}</b>)}
+            {kv('How / why', app[APP_COLS.assignNote])}
+            {kv('Age on start / years left', `${age ?? '?'} / ${field(app, cfg, 'yearsLeft')}`)}
+            {kv('Flemish status', app[APP_COLS.flStatus])}
+            {kv('Accommodation', `${effectiveAccommodation(app, cfg)}${app[APP_COLS.dormWaiting] === 'TRUE' ? ' — no dorm place yet' : ''}`)}
+            {kv('Fee − aid = due', `${fees[APP_COLS.fee] || '?'} − ${app[APP_COLS.aid] || '0'} = ${fees[APP_COLS.amountDue] || '?'} EUR${app[APP_COLS.aidNote] ? ` (aid: ${app[APP_COLS.aidNote]})` : ''}`)}
+            {kv('Locked', app[APP_COLS.locked] === 'TRUE' ? `yes, ${app[APP_COLS.lockedAt]}` : 'no')}
+            {kv('Admitted', app[APP_COLS.admittedAt] ? `${app[APP_COLS.admittedAt]}, pay by ${app[APP_COLS.paymentDeadline]}` : 'no')}
+            {kv('Reminders', app[APP_COLS.reminders])}
+            {kv('Paid', app[APP_COLS.paidAt] ? `${app[APP_COLS.paidAt]} (${app[APP_COLS.paymentIds]})` : 'no')}
+            {kv('Course decisions', `OK: ${app[APP_COLS.okForCourses] || '—'} · NOT OK: ${app[APP_COLS.notOkForCourses] || '—'}`)}
+            {kv('Motivation check (LLM)', app[APP_COLS.motivationCheck])}
+            {kv('Open flags', app[APP_COLS.openFlags])}
+            {kv('Notes', app[APP_COLS.notes])}
+          </tbody></table>
+        </div>
+        <div class="panel">
+          <h2>Contact</h2>
+          <table class="kv"><tbody>
+            {(['firstName', 'surname', 'email', 'phone', 'address', 'birthDate', 'gender', 'nationality', 'language', 'tshirt', 'parentName', 'parentEmail', 'parentPhone', 'parentAllMails'] as FieldKey[]).map(fv)}
+          </tbody></table>
+        </div>
+      </div>
+      {GROUPS.filter(([t]) => t !== 'Student' && t !== 'Parent').map(([title, keys]) => (
+        <div class="panel">
+          <h2>{title}</h2>
+          <table class="kv"><tbody>{keys.map(fv)}</tbody></table>
+        </div>
+      ))}
+      <div class="panel">
+        <h2>Parent authorisations, dietary / medical <span class="muted small">(special-category data)</span></h2>
+        <table class="kv"><tbody>{(['parentAuthData', 'parentAuthFreeTime', ...SENSITIVE] as FieldKey[]).map(fv)}</tbody></table>
+      </div>
+      <div class="panel">
+        <h2>Flags</h2>
+        {flags.length === 0 ? <p class="muted">None.</p> : (
+          <table><tbody>
+            <tr><th>Type</th><th>Detail</th><th>Status</th><th>Decision note</th><th>Comments / actions</th></tr>
+            {flags.map((f) => <tr><td>{f[FLAG_COLS.type]}</td><td>{f[FLAG_COLS.detail]}</td><td>{f[FLAG_COLS.status]}</td><td>{f[FLAG_COLS.note]}</td><td class="small pre">{f[FLAG_COLS.comments]}</td></tr>)}
+          </tbody></table>
+        )}
+      </div>
+      {pays.length > 0 && (
+        <div class="panel">
+          <h2>Payments</h2>
+          <table><tbody>
+            <tr><th>Payment</th><th>Payer</th><th>Proof file</th><th>Proof check</th><th>Note</th></tr>
+            {pays.map((p) => (
+              <tr>
+                <td>{p[PAY_COLS.paymentId]}</td>
+                <td>{p[PAY_COLS.payerName]} <span class="muted small">{p[PAY_COLS.payerEmail]}</span></td>
+                <td>{p[PAY_COLS.proofFile]}</td>
+                <td>{p[PAY_COLS.proofStatus]} <span class="small muted">{p[PAY_COLS.proofDetail]}</span></td>
+                <td>{p[PAY_COLS.note]}</td>
+              </tr>
+            ))}
+          </tbody></table>
+        </div>
+      )}
+      <details>
+        <summary>All other app columns</summary>
+        <table class="kv"><tbody>{Object.keys(app).filter((k) => !formCols.has(k) && !shownApp.has(k)).map((k) => kv(k, app[k]))}</tbody></table>
+      </details>
+      <details>
+        <summary>History ({history.length})</summary>
+        <AuditTable rows={history} hideApp />
+      </details>
+    </div>
+  );
+}
+
+function EditView({ id }: { id: string }) {
   const { snap, repo, run } = useApp();
   const app = snap.apps.find((a) => a[APP_COLS.id] === id);
   const [draft, setDraft] = useState<Row>({});
@@ -113,7 +270,6 @@ export function ApplicationDetail({ id }: { id: string }) {
 
   return (
     <div>
-      <p><a href="#/apps">← Applications</a></p>
       <h1>
         {id} — {fullName(app, cfg)} <span class="badge">{app[APP_COLS.status]}</span>
       </h1>
@@ -192,7 +348,12 @@ export function ApplicationDetail({ id }: { id: string }) {
         {app[APP_COLS.status] === 'active' && (
           <>
             <input placeholder="Reason for withdrawal" value={reason} onInput={(e) => setReason((e.target as HTMLInputElement).value)} />
-            <button disabled={!reason.trim()} onClick={() => run(() => repo.withdraw(id, reason.trim()), `${id} withdrawn.`)}>Withdraw</button>
+            <button
+              disabled={!reason.trim()}
+              onClick={() => confirm(`Are you sure you want to withdraw (unenroll) ${id}? Their course place is freed; the record is kept.`) && run(() => repo.withdraw(id, reason.trim()), `${id} withdrawn.`)}
+            >
+              Withdraw
+            </button>
           </>
         )}
         {app[APP_COLS.status] === 'withdrawn' && <button onClick={() => run(() => repo.reinstate(id), `${id} reinstated.`)}>Reinstate</button>}

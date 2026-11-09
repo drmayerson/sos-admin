@@ -14,7 +14,7 @@ import { Home } from './screens/Home';
 import { Import } from './screens/Import';
 import { Locking } from './screens/Locking';
 import { Exports } from './screens/Exports';
-import { LlmChecks, Schools } from './screens/LlmScreens';
+import { MotivationCheck, PrereqHelper, Schools } from './screens/LlmScreens';
 import { Merge } from './screens/Merge';
 import { NewSeason } from './screens/NewSeason';
 import { PaymentImport, PaymentMatch, Proofs, Unpaid } from './screens/Payments';
@@ -25,11 +25,14 @@ import { Young } from './screens/Young';
 const NAV: [string, string][] = [
   ['', 'Home'],
   ['setup', 'Season setup'],
+  ['prereq', 'LLM helper – prerequisites'],
   ['-', 'Applications'],
   ['import', 'Import CSV'],
   ['merge', 'Near-duplicates'],
   ['young', 'Young students'],
   ['flags', 'Flags'],
+  ['schools', 'LLM helper – FL schools'],
+  ['motivation', 'LLM helper – motivation check'],
   ['apps', 'Applications'],
   ['-', 'Assignment'],
   ['assign', 'Assign courses'],
@@ -43,9 +46,7 @@ const NAV: [string, string][] = [
   ['paymatch', 'Match payments'],
   ['proofs', 'Proof of payment'],
   ['unpaid', 'Awaiting payment'],
-  ['-', 'Checks & lists'],
-  ['schools', 'Flemish schools'],
-  ['llm', 'LLM checks'],
+  ['-', 'Lists'],
   ['exports', 'Rosters & lists'],
   ['-', ''],
   ['audit', 'Audit log'],
@@ -136,7 +137,9 @@ function Main({ repo, sheetId, onDisconnect }: { repo: Repo; sheetId: string; on
     proofs: () => <Proofs />,
     unpaid: () => <Unpaid />,
     schools: () => <Schools />,
-    llm: () => <LlmChecks />,
+    motivation: () => <MotivationCheck />,
+    llm: () => <MotivationCheck />,
+    prereq: () => <PrereqHelper />,
     exports: () => <Exports />,
     newseason: () => <NewSeason />,
     audit: () => <Audit />,

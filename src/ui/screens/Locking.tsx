@@ -20,6 +20,7 @@ export function Locking() {
   const batch = (flOnly: boolean) => active.filter((a) => !isLocked(a) && a[APP_COLS.postingUTC] <= upToIso && (!flOnly || countsAsFlemish(a)));
 
   const doLock = (ids: string[], label: string) =>
+    confirm(`Lock up to ${ids.length} student(s)? Locked students are never changed by re-runs (only by unlocking).`) &&
     run(async () => {
       const s = await repo.lock(ids);
       setSkipped(s);
@@ -32,7 +33,7 @@ export function Locking() {
       <p>
         Lock a student once their assignment has been communicated: re-runs never change a locked student. Students can't be
         locked while unassigned, waiting for a dorm place, with an open young-student flag, or while their Flemish-school claim
-        isn't confirmed or rejected yet (decide it here, or in bulk on the <a href="#/schools">Flemish schools</a> screen).
+        isn't confirmed or rejected yet (decide it here, or in bulk on the <a href="#/schools">LLM helper – FL schools</a> screen).
       </p>
 
       <div class="panel">

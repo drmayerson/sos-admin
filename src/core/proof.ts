@@ -50,11 +50,13 @@ export function analyzeProof(text: string, exp: ProofExpectation): ProofAnalysis
 export type Pairing = { kind: 'paired'; file: number } | { kind: 'ambiguous'; files: number[] } | { kind: 'missing' };
 
 /**
- * Pair dropped proof files with payment rows by file name (case-insensitive; a saved file may carry a prefix,
- * e.g. "2026-05-06 12.30 screenshot.png"). A pairing is automatic only when exactly one payment and one file
- * share the name; with "screenshot.png" × 5 the human picks per payment.
+ * Pair dropped proof files with payment rows by file name (case-insensitive). A saved file may carry a prefix:
+ * - with the payer's e-mail (recommended naming when saving the attachments: "<e-mail>__<original name>"), the
+ *   file belongs to that payment even if many payments share "payment.jpg";
+ * - any other prefix (e.g. a date) is allowed, but then pairing is automatic only when exactly one payment and one
+ *   file share the name; with "screenshot.png" × 5 the human picks per payment.
  */
-export function pairProofFiles(payments: { id: string; proofFile: string }[], fileNames: string[]): Map<string, Pairing> {
+export function pairProofFiles(payments: { id: string; proofFile: string; email?: string }[], fileNames: string[]): Map<string, Pairing> {
   const norm = (s: string) => s.trim().toLowerCase();
   const filesFor = (proof: string) =>
     fileNames.map((f, i) => ({ f: norm(f), i })).filter(({ f }) => proof && (f === norm(proof) || f.endsWith(` ${norm(proof)}`) || f.endsWith(`_${norm(proof)}`))).map((x) => x.i);
@@ -62,7 +64,11 @@ export function pairProofFiles(payments: { id: string; proofFile: string }[], fi
   const out = new Map<string, Pairing>();
   for (const p of payments) {
     const files = filesFor(p.proofFile);
-    if (files.length === 0) out.set(p.id, { kind: 'missing' });
+    const e = norm(p.email ?? '').replace(/\s+/g, '');
+    const withEmail = e ? files.filter((i) => norm(fileNames[i]).includes(e)) : [];
+    const sameEmailAndName = payments.filter((q) => norm(q.email ?? '').replace(/\s+/g, '') === e && norm(q.proofFile) === norm(p.proofFile)).length;
+    if (withEmail.length === 1 && sameEmailAndName === 1) out.set(p.id, { kind: 'paired', file: withEmail[0] });
+    else if (files.length === 0) out.set(p.id, { kind: 'missing' });
     else if (files.length === 1 && sameName(p.proofFile) === 1) out.set(p.id, { kind: 'paired', file: files[0] });
     else out.set(p.id, { kind: 'ambiguous', files });
   }

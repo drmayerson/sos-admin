@@ -94,7 +94,10 @@ function Group({ earliestId, flags, cfg }: { earliestId: string; flags: Row[]; c
       <div class="row">
         <button
           class="primary"
-          onClick={() => run(() => repo.mergeGroup(earliestId, laterIds, pick), `Merged ${laterIds.join(', ')} into ${earliestId}.`)}
+          onClick={() =>
+            confirm(`Merge ${laterIds.join(', ')} into ${earliestId}? The later application(s) are kept but marked "merged".`) &&
+            run(() => repo.mergeGroup(earliestId, laterIds, pick), `Merged ${laterIds.join(', ')} into ${earliestId}.`)
+          }
         >
           Merge {laterIds.join(', ')} into {earliestId}
         </button>

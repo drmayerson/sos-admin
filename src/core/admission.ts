@@ -31,8 +31,8 @@ export interface AdmissionExport {
  * Rows for the admission mail merge. The parent always receives admission/payment e-mails; `CcParentEmail`
  * is empty when the parent's address equals the student's, so nobody gets the same e-mail twice.
  */
-export function admissionExport(apps: Row[], cfg: SeasonConfig, exportDate: string): AdmissionExport {
-  const paymentDeadline = addDays(exportDate, cfg.paymentDeadlineDays);
+export function admissionExport(apps: Row[], cfg: SeasonConfig, exportDate: string, deadline?: string): AdmissionExport {
+  const paymentDeadline = deadline || addDays(exportDate, cfg.paymentDeadlineDays);
   const warnings: string[] = [];
   const claimed: string[] = [];
   const rows = admissionCandidates(apps).map((a) => {

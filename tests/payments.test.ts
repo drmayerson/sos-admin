@@ -138,7 +138,7 @@ describe('payment flow in the repository', () => {
     expect(await repo.checkPaymentDeadlines()).toBe(1);
     expect(await repo.checkPaymentDeadlines()).toBe(0);
     // Final reminder → new deadline in 7 days; once that passes: FINAL_DEADLINE_PASSED.
-    expect(await repo.recordReminders([a2], true)).toBe('2026-06-08');
+    expect(await repo.recordReminders([a2], true, '2026-06-08')).toBe('2026-06-08');
     s = await repo.snapshot();
     expect(byId(a2)[APP_COLS.reminders]).toBe('2026-06-01 FINAL reminder, new deadline 2026-06-08');
     const later = deadlineFlags(s.apps, s.flags as Row[], '2026-06-09');
@@ -174,5 +174,21 @@ describe('pairing proof files with payments', () => {
     expect(m.get('P-1')).toEqual({ kind: 'paired', file: 0 });
     expect(m.get('P-2')).toEqual({ kind: 'ambiguous', files: [1, 2] });
     expect(m.get('P-4')).toEqual({ kind: 'missing' });
+  });
+});
+
+describe('proof files named with the payer e-mail', () => {
+  it('pairs uniquely even when many payments share "payment.jpg"', async () => {
+    const { pairProofFiles } = await import('../src/core/proof');
+    const pays = [
+      { id: 'P-1', proofFile: 'payment.jpg', email: 'Ann@Example.com ' },
+      { id: 'P-2', proofFile: 'payment.jpg', email: 'bob@example.com' },
+      { id: 'P-3', proofFile: 'payment.jpg', email: 'carl@example.com' },
+    ];
+    const files = ['ann@example.com__payment.jpg', 'bob@example.com__payment.jpg', 'payment.jpg'];
+    const m = pairProofFiles(pays, files);
+    expect(m.get('P-1')).toEqual({ kind: 'paired', file: 0 });
+    expect(m.get('P-2')).toEqual({ kind: 'paired', file: 1 });
+    expect(m.get('P-3')!.kind).toBe('ambiguous'); // no file with carl's e-mail: falls back to the shared name
   });
 });
