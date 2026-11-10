@@ -1,9 +1,9 @@
-import { useState } from 'preact/hooks';
 import { isActive, priorityCompare } from '../../core/assign';
 import { countsAsFlemish } from '../../core/fees';
 import { field } from '../../core/flags';
 import { APP_COLS, type Row, type SeasonConfig } from '../../core/types';
 import { fmtTime, fullName, useApp } from '../ctx';
+import { UnenrollButton } from '../Unenroll';
 
 export function DormFull() {
   const { snap } = useApp();
@@ -38,7 +38,6 @@ export function DormFull() {
 
 function DormRow({ n, a, cfg }: { n: number; a: Row; cfg: SeasonConfig }) {
   const { repo, run } = useApp();
-  const [reason, setReason] = useState('no dorm place, did not want EVENING/DAY');
   const id = a[APP_COLS.id];
   const fallback = field(a, cfg, 'fallback');
   return (
@@ -55,18 +54,7 @@ function DormRow({ n, a, cfg }: { n: number; a: Row; cfg: SeasonConfig }) {
           <button onClick={() => run(() => repo.setAccommodation(id, 'EVENING'), `${id} is now an EVENING student.`)}>→ EVENING</button>
           <button onClick={() => run(() => repo.setAccommodation(id, 'DAY'), `${id} is now a DAY student.`)}>→ DAY</button>
         </div>
-        <details>
-          <summary class="small">Withdraw…</summary>
-          <div class="row">
-            <input value={reason} onInput={(e) => setReason((e.target as HTMLInputElement).value)} />
-            <button
-              disabled={!reason.trim()}
-              onClick={() => confirm(`Are you sure you want to withdraw (unenroll) ${id}?`) && run(() => repo.withdraw(id, reason), `${id} withdrawn.`)}
-            >
-              Withdraw
-            </button>
-          </div>
-        </details>
+        <UnenrollButton app={a} />
       </td>
     </tr>
   );

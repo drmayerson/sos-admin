@@ -9,6 +9,32 @@ export interface ProofExpectation {
   iban: string;
 }
 
+/** Valid IBANs in a text (spaces allowed; checked with the ISO 7064 mod-97 check digits). */
+export function ibansIn(text: string): string[] {
+  const out = new Set<string>();
+  const t = text.toUpperCase().replace(/[^A-Z0-9 \n]/g, ' ');
+  for (const m of t.matchAll(/\b([A-Z]{2}\d{2}(?: ?[A-Z0-9]){10,30})/g)) {
+    const raw = m[1].replace(/ /g, '');
+    // Try the longest prefix first (OCR may glue the next word on).
+    for (let len = Math.min(raw.length, 34); len >= 14; len--) {
+      const iban = raw.slice(0, len);
+      if (validIban(iban)) {
+        out.add(iban.replace(/(.{4})(?=.)/g, '$1 '));
+        break;
+      }
+    }
+  }
+  return [...out];
+}
+
+export function validIban(iban: string): boolean {
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(iban)) return false;
+  const re = (iban.slice(4) + iban.slice(0, 4)).replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55));
+  let r = 0;
+  for (const ch of re) r = (r * 10 + Number(ch)) % 97;
+  return r === 1;
+}
+
 export interface ProofAnalysis {
   verdict: 'likely-ok' | 'needs-review';
   amountFound: boolean;
@@ -16,6 +42,8 @@ export interface ProofAnalysis {
   ibanFound: boolean;
   /** Amounts that look like money in the text (for the reviewer). */
   amountsSeen: number[];
+  /** IBANs in the text other than the receiving account: probably the account the payment came from. */
+  payerIbans: string[];
   detail: string;
 }
 
@@ -44,7 +72,9 @@ export function analyzeProof(text: string, exp: ProofExpectation): ProofAnalysis
   const detail =
     `amount ${exp.amounts.join(' or ')} ${yes(amountFound)}; reference ${yes(referenceFound)}; IBAN ${yes(ibanFound)}` +
     (amountFound ? '' : amountsSeen.length ? ` (amounts seen: ${amountsSeen.slice(0, 6).join(', ')})` : ' (no amounts recognised)');
-  return { verdict, amountFound, referenceFound, ibanFound, amountsSeen, detail };
+  const own = exp.iban.replace(/\s/g, '').toUpperCase();
+  const payerIbans = ibansIn(text).filter((i) => i.replace(/\s/g, '') !== own);
+  return { verdict, amountFound, referenceFound, ibanFound, amountsSeen, payerIbans, detail };
 }
 
 export type Pairing = { kind: 'paired'; file: number } | { kind: 'ambiguous'; files: number[] } | { kind: 'missing' };

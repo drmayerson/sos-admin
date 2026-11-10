@@ -64,6 +64,8 @@ export interface SeasonConfig {
   flemishStatusValue: string;
   /** Archived (previous) season: the app opens it read-only. */
   archived: boolean;
+  /** Staff T-shirt counts typed in by hand: "S1|Teachers|M" → 4. */
+  tshirtStaff: Record<string, number>;
 }
 
 /** Form fields the app knows about. The column map ties each to the current season's header text. */
@@ -127,6 +129,16 @@ export const APP_COLS = {
   reminderDeadline: 'ReminderDeadline',
   /** "TRUE" when the latest reminder was the final one. */
   finalReminder: 'FinalReminder',
+  /** Amount paid, recorded when the payment was approved. */
+  amountPaid: 'AmountPaid',
+  /** Date of unenrolment (status withdrawn). */
+  unenrolledAt: 'UnenrolledAt',
+  /** The course the student had when unenrolled (the assignment itself is cleared). */
+  courseAtUnenrolment: 'CourseAtUnenrolment',
+  /** For students unenrolled after paying: "eligible" / "not eligible". */
+  reimbursement: 'Reimbursement',
+  reimbursementNote: 'ReimbursementNote',
+  reimbursedAt: 'ReimbursedAt',
   /** Phase 4 LLM motivation check result ("no flag" or the reason). */
   motivationCheck: 'MotivationCheck',
   notes: 'Notes',
@@ -204,5 +216,7 @@ export const PAY_COLS = {
   /** '' / likely-ok / needs-review / approved / rejected */
   proofStatus: 'ProofStatus',
   proofDetail: 'ProofDetail',
+  /** IBAN the payment came from, read from the proof of payment (or typed in); used for reimbursements. */
+  payerIban: 'PayerIBAN',
   note: 'Note',
 } as const;

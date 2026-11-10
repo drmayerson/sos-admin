@@ -13,7 +13,9 @@ import { Flags } from './screens/Flags';
 import { Home } from './screens/Home';
 import { Import } from './screens/Import';
 import { Locking } from './screens/Locking';
+import { Dashboard } from './screens/Dashboard';
 import { Exports } from './screens/Exports';
+import { Reimbursements } from './screens/Reimbursements';
 import { MotivationCheck, PrereqHelper, Schools } from './screens/LlmScreens';
 import { Merge } from './screens/Merge';
 import { NewSeason } from './screens/NewSeason';
@@ -24,6 +26,7 @@ import { Young } from './screens/Young';
 
 const NAV: [string, string][] = [
   ['', 'Home'],
+  ['dashboard', 'Dashboard'],
   ['setup', 'Season setup'],
   ['prereq', 'LLM helper – prerequisites'],
   ['-', 'Applications'],
@@ -46,6 +49,7 @@ const NAV: [string, string][] = [
   ['paymatch', 'Match payments'],
   ['proofs', 'Proof of payment'],
   ['unpaid', 'Awaiting payment'],
+  ['refunds', 'Unenrolled after paid'],
   ['-', 'Lists'],
   ['exports', 'Rosters & lists'],
   ['-', ''],
@@ -141,6 +145,8 @@ function Main({ repo, sheetId, onDisconnect }: { repo: Repo; sheetId: string; on
     llm: () => <MotivationCheck />,
     prereq: () => <PrereqHelper />,
     exports: () => <Exports />,
+    dashboard: () => <Dashboard />,
+    refunds: () => <Reimbursements />,
     newseason: () => <NewSeason />,
     audit: () => <Audit />,
   };

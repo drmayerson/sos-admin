@@ -7,6 +7,7 @@ import { fieldOptions } from '../../core/fieldOptions';
 import { fold } from '../../core/text';
 import { APP_COLS, FLAG_COLS, PAY_COLS, type FieldKey, type Row } from '../../core/types';
 import { choicesText, fmtTime, fullName, useApp } from '../ctx';
+import { UnenrollButton } from '../Unenroll';
 import { AuditTable } from './Audit';
 
 export function Applications() {
@@ -92,6 +93,7 @@ export function ApplicationDetail({ id }: { id: string }) {
     detailMode = m;
     setModeState(m);
   };
+  const current = snap.apps.find((a) => a[APP_COLS.id] === id);
   const list = navList.includes(id) ? navList : snap.apps.map((a) => a[APP_COLS.id]);
   const i = list.indexOf(id);
   const prev = i > 0 ? list[i - 1] : '';
@@ -117,6 +119,7 @@ export function ApplicationDetail({ id }: { id: string }) {
         <span class="spacer" />
         <button class={mode === 'full' ? 'primary' : ''} onClick={() => setMode('full')}>Full view</button>
         <button class={mode === 'edit' ? 'primary' : ''} onClick={() => setMode('edit')}>Edit</button>
+        {current && <UnenrollButton key={id} app={current} />}
       </div>
       {mode === 'full' ? <FullView key={id} id={id} /> : <EditView key={id} id={id} />}
     </div>
@@ -231,7 +234,6 @@ function EditView({ id }: { id: string }) {
   const app = snap.apps.find((a) => a[APP_COLS.id] === id);
   const [draft, setDraft] = useState<Row>({});
   const [showSensitive, setShowSensitive] = useState(false);
-  const [reason, setReason] = useState('');
   if (!snap.cfg) return <p class="warn">Set up the season first.</p>;
   if (!app) return <p class="warn">No application {id}.</p>;
   const cfg = snap.cfg;
@@ -345,17 +347,6 @@ function EditView({ id }: { id: string }) {
         <button class="primary" disabled={changed.length === 0} onClick={save}>Save {changed.length || ''} change(s)</button>
         {changed.length > 0 && <button onClick={() => setDraft({})}>Discard</button>}
         <span class="spacer" />
-        {app[APP_COLS.status] === 'active' && (
-          <>
-            <input placeholder="Reason for withdrawal" value={reason} onInput={(e) => setReason((e.target as HTMLInputElement).value)} />
-            <button
-              disabled={!reason.trim()}
-              onClick={() => confirm(`Are you sure you want to withdraw (unenroll) ${id}? Their course place is freed; the record is kept.`) && run(() => repo.withdraw(id, reason.trim()), `${id} withdrawn.`)}
-            >
-              Withdraw
-            </button>
-          </>
-        )}
         {app[APP_COLS.status] === 'withdrawn' && <button onClick={() => run(() => repo.reinstate(id), `${id} reinstated.`)}>Reinstate</button>}
       </div>
 

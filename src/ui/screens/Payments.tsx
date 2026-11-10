@@ -11,6 +11,7 @@ import { fold } from '../../core/text';
 import { APP_COLS, PAY_COLS, type Row, type SeasonConfig } from '../../core/types';
 import { DEMO_PAYMENTS, makeDemoProofs } from '../../store/demo';
 import { fullName, useApp } from '../ctx';
+import { UnenrollButton } from '../Unenroll';
 import { extractText } from '../ocr';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -255,7 +256,7 @@ export function Proofs() {
     if (!f) return;
     const { text, how } = await extractText(f);
     const a = analyzeProof(text, { amounts: [expected(p)], reference: cfg.paymentReference, iban: cfg.paymentIban });
-    await repo.setProofCheck(p[PAY_COLS.paymentId], a.verdict, `${f.name} (${how}): ${a.detail}`);
+    await repo.setProofCheck(p[PAY_COLS.paymentId], a.verdict, `${f.name} (${how}): ${a.detail}${a.payerIbans[0] ? `; paid from ${a.payerIbans[0]}` : ''}`, a.payerIbans[0] ?? '');
   };
   const checkAll = async () => {
     const list = todo.filter((p) => fileFor(p[PAY_COLS.paymentId]) && !p[PAY_COLS.proofStatus]);
@@ -464,27 +465,25 @@ export function Unpaid() {
               <td>{a[APP_COLS.admittedAt]}</td>
               <td>{effectiveDeadline(a)}{isOverdue(a, t) && <span class="badge warnb">overdue</span>}{a[APP_COLS.finalReminder] === 'TRUE' && <span class="badge">final</span>}</td>
               <td class="small">{reminders.length ? reminders.join(' · ') : '—'}</td>
-              <td>
-                <button
-                  onClick={() => {
-                    const reason = prompt(`Unenroll ${id} ${fullName(a, cfg)}? Their course place is freed; the record is kept.\n\nReason:`, 'decided not to participate (did not pay)');
-                    if (reason === null || !reason.trim()) return;
-                    if (!confirm(`Are you sure you want to unenroll ${id} ${fullName(a, cfg)}?`)) return;
-                    run(() => repo.withdraw(id, reason.trim()), `${id} unenrolled.`);
-                  }}
-                >
-                  Unenroll…
-                </button>
-              </td>
+              <td><UnenrollButton app={a} /></td>
             </tr>
           );
         })}
       </tbody></table>
       <details>
-        <summary>Paid ({paid.length})</summary>
+        <summary>Paid ({paid.length}) — unenrolling a paid student puts them on the <a href="#/refunds">Unenrolled after paid</a> list</summary>
         <table><tbody>
-          <tr><th>ID</th><th>Name</th><th>Paid on</th><th>Payment(s)</th></tr>
-          {paid.map((a) => <tr><td><a href={`#/apps/${a[APP_COLS.id]}`}>{a[APP_COLS.id]}</a></td><td>{fullName(a, cfg)}</td><td>{a[APP_COLS.paidAt]}</td><td>{a[APP_COLS.paymentIds]}</td></tr>)}
+          <tr><th>ID</th><th>Name</th><th>Paid on</th><th>Amount</th><th>Payment(s)</th><th /></tr>
+          {paid.map((a) => (
+            <tr>
+              <td><a href={`#/apps/${a[APP_COLS.id]}`}>{a[APP_COLS.id]}</a></td>
+              <td>{fullName(a, cfg)}</td>
+              <td>{a[APP_COLS.paidAt]}</td>
+              <td>{a[APP_COLS.amountPaid] || a[APP_COLS.amountDue]}</td>
+              <td>{a[APP_COLS.paymentIds]}</td>
+              <td><UnenrollButton app={a} label="Unenroll (paid)…" /></td>
+            </tr>
+          ))}
         </tbody></table>
       </details>
     </div>

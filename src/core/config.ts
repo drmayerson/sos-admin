@@ -31,6 +31,7 @@ export function configFromJson(j: ConfigJson): SeasonConfig {
     columnMap: { ...COLUMN_MAP_2026 },
     flemishStatusValue: FLEMISH_STATUS_2026,
     archived: false,
+    tshirtStaff: {},
   };
 }
 
@@ -54,6 +55,7 @@ export function configToTables(c: SeasonConfig): ConfigTables {
     ['paymentIban', c.paymentIban],
     ['flemishStatusValue', c.flemishStatusValue],
     ['archived', c.archived ? 'TRUE' : ''],
+    ['tshirtStaff', JSON.stringify(c.tshirtStaff ?? {})],
     ['threshold.youngMaxAge', String(c.thresholds.youngMaxAge)],
     ['threshold.youngYearsLeft', c.thresholds.youngYearsLeft],
     ['threshold.oldMinAge', String(c.thresholds.oldMinAge)],
@@ -101,6 +103,7 @@ export function configFromTables(t: ConfigTables): SeasonConfig {
     paymentIban: kv.get('paymentIban') ?? 'BE60 7340 0666 0370',
     flemishStatusValue: kv.get('flemishStatusValue') ?? FLEMISH_STATUS_2026,
     archived: kv.get('archived') === 'TRUE',
+    tshirtStaff: parseJson(kv.get('tshirtStaff')),
     thresholds: {
       youngMaxAge: num('threshold.youngMaxAge'),
       youngYearsLeft: kv.get('threshold.youngYearsLeft') ?? '>2',
@@ -124,6 +127,15 @@ export function configFromTables(t: ConfigTables): SeasonConfig {
       prereqNote: r.PrerequisiteNote ?? '',
     })),
   };
+}
+
+function parseJson(s: string | undefined): Record<string, number> {
+  try {
+    const v = JSON.parse(s || '{}');
+    return v && typeof v === 'object' ? v : {};
+  } catch {
+    return {};
+  }
 }
 
 /** Problems that make the config unusable for import. Empty list = OK. */
@@ -196,6 +208,7 @@ export function nextSeasonConfig(c: SeasonConfig, season: string): SeasonConfig 
   n.season = season;
   n.idPrefix = `SOS${season.slice(-2)}`;
   n.archived = false;
+  n.tshirtStaff = {};
   for (const x of n.courses) x.limit = x.softMax;
   const shift = Number(season) - Number(c.season);
   if (Number.isFinite(shift) && shift > 0)

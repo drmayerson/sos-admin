@@ -125,6 +125,12 @@ export function newAppRow(values: Row, cfg: SeasonConfig, id: string, importKey:
     [APP_COLS.amountDue]: '',
     [APP_COLS.admittedAt]: '',
     [APP_COLS.paymentDeadline]: '',
+    [APP_COLS.amountPaid]: '',
+    [APP_COLS.unenrolledAt]: '',
+    [APP_COLS.courseAtUnenrolment]: '',
+    [APP_COLS.reimbursement]: '',
+    [APP_COLS.reimbursementNote]: '',
+    [APP_COLS.reimbursedAt]: '',
     [APP_COLS.notes]: '',
     [APP_COLS.withdrawnReason]: '',
   });

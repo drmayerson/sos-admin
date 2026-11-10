@@ -191,6 +191,7 @@ export function planPayments(csv: ParsedCsv, apps: Row[], existing: Row[], cfg: 
       [PAY_COLS.duplicateOf]: '',
       [PAY_COLS.proofStatus]: '',
       [PAY_COLS.proofDetail]: '',
+      [PAY_COLS.payerIban]: '',
       [PAY_COLS.note]: '',
     };
     const first = firstOfContent.get(ck);

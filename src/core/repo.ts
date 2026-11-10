@@ -153,11 +153,46 @@ export class Repo {
     for (const id of reconcile) await this.reconcileFlags(id, cfg);
   }
 
+  /** Unenroll (withdraw) a student who hasn't paid. For paid students use unenroll() with reimbursement details. */
   async withdraw(id: string, reason: string): Promise<void> {
-    await this.bulkUpdate(
-      [{ id, values: { [APP_COLS.status]: 'withdrawn', [APP_COLS.withdrawnReason]: reason, [APP_COLS.assignedCourse]: '', [APP_COLS.pinnedCourse]: '', [APP_COLS.dormWaiting]: '' } }],
-      'withdraw',
-    );
+    await this.unenroll(id, reason);
+  }
+
+  /**
+   * Unenroll a student: status "withdrawn", course/dorm place freed, record kept. A student who already paid needs
+   * `paid` (eligible for reimbursement yes/no + a note) and then appears on the "Unenrolled after paid" list.
+   */
+  async unenroll(id: string, reason: string, paid?: { eligible: boolean; note: string }): Promise<void> {
+    const app = (await this.store.readAll('Applications')).find((a) => a[APP_COLS.id] === id);
+    if (!app) throw new Error(`No application ${id}`);
+    if (!reason.trim()) throw new Error('Give a reason for the unenrolment.');
+    if (app[APP_COLS.paidAt] && (!paid || !paid.note.trim()))
+      throw new Error(`${id} has already paid: add a note and say whether they are eligible for reimbursement.`);
+    const values: Row = {
+      [APP_COLS.status]: 'withdrawn',
+      [APP_COLS.withdrawnReason]: reason.trim(),
+      [APP_COLS.unenrolledAt]: this.clock().slice(0, 10),
+      [APP_COLS.courseAtUnenrolment]: app[APP_COLS.assignedCourse] ?? '',
+      [APP_COLS.assignedCourse]: '',
+      [APP_COLS.pinnedCourse]: '',
+      [APP_COLS.dormWaiting]: '',
+    };
+    if (app[APP_COLS.paidAt] && paid)
+      Object.assign(values, { [APP_COLS.reimbursement]: paid.eligible ? 'eligible' : 'not eligible', [APP_COLS.reimbursementNote]: paid.note.trim() });
+    await this.bulkUpdate([{ id, values }], app[APP_COLS.paidAt] ? 'unenrolled after payment' : 'withdraw');
+  }
+
+  async setReimbursement(id: string, eligible: boolean, note: string): Promise<void> {
+    await this.bulkUpdate([{ id, values: { [APP_COLS.reimbursement]: eligible ? 'eligible' : 'not eligible', [APP_COLS.reimbursementNote]: note } }], 'reimbursement');
+  }
+
+  async markReimbursed(id: string, date: string): Promise<void> {
+    await this.bulkUpdate([{ id, values: { [APP_COLS.reimbursedAt]: date } }], 'reimbursed');
+  }
+
+  /** Correct or fill in the IBAN a payment came from (used for reimbursements). */
+  async setPayerIban(paymentId: string, iban: string): Promise<void> {
+    await this.payUpdate(paymentId, { [PAY_COLS.payerIban]: iban.trim().toUpperCase() }, 'payer IBAN');
   }
 
   // ---------------------------------------------------------------- assignment (phase 2)
@@ -321,9 +356,12 @@ export class Repo {
   }
 
   /** Store the automatic proof check (likely-ok / needs-review). Never overrides a human decision. */
-  async setProofCheck(paymentId: string, verdict: 'likely-ok' | 'needs-review', detail: string): Promise<void> {
+  async setProofCheck(paymentId: string, verdict: 'likely-ok' | 'needs-review', detail: string, payerIban = ''): Promise<void> {
     const p = (await this.store.readAll('Payments')).find((x) => x[PAY_COLS.paymentId] === paymentId);
-    if (!p || p[PAY_COLS.proofStatus] === 'approved' || p[PAY_COLS.proofStatus] === 'rejected') return;
+    if (!p) return;
+    // The paying IBAN is useful for reimbursements even after a human decision; never overwrite one typed in.
+    if (payerIban && !p[PAY_COLS.payerIban]) await this.payUpdate(paymentId, { [PAY_COLS.payerIban]: payerIban }, 'proof check');
+    if (p[PAY_COLS.proofStatus] === 'approved' || p[PAY_COLS.proofStatus] === 'rejected') return;
     await this.payUpdate(paymentId, { [PAY_COLS.proofStatus]: verdict, [PAY_COLS.proofDetail]: detail }, 'proof check');
   }
 
@@ -343,7 +381,7 @@ export class Repo {
       ids.map((id) => {
         const a = apps.find((x) => x[APP_COLS.id] === id)!;
         const list = [...new Set([...idList(a[APP_COLS.paymentIds]), paymentId])].join(', ');
-        return { id, values: { [APP_COLS.paidAt]: a[APP_COLS.paidAt] || today, [APP_COLS.paymentIds]: list } };
+        return { id, values: { [APP_COLS.paidAt]: a[APP_COLS.paidAt] || today, [APP_COLS.paymentIds]: list, [APP_COLS.amountPaid]: a[APP_COLS.amountPaid] || a[APP_COLS.amountDue] || '' } };
       }),
       'paid',
     );
@@ -490,7 +528,7 @@ export class Repo {
   }
 
   async reinstate(id: string): Promise<void> {
-    await this.updateApplication(id, { [APP_COLS.status]: 'active', [APP_COLS.withdrawnReason]: '' }, 'reinstate');
+    await this.updateApplication(id, { [APP_COLS.status]: 'active', [APP_COLS.withdrawnReason]: '', [APP_COLS.unenrolledAt]: '' }, 'reinstate');
   }
 
   // ---------------------------------------------------------------- flags
