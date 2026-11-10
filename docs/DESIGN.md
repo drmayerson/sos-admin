@@ -176,19 +176,23 @@ Automate the Summer of Science application workflow (intake → checks → cours
 
 *Parked items, collected here so nothing gets lost. Move an item into the relevant section once it is decided.*
 
+### Questions for Daniel's next review
+1. Closing a young-student flag warns about "Student dorm OK" only for FULL students (EVENING/DAY don't sleep in the dorms). OK?
+2. Proof "likely OK" = amount + (reference OR IBAN). Or require all three (one-line change)?
+3. Payments are linked automatically by e-mail and by a *unique* exact student/parent name. Should name-only matches always be confirmed by hand?
+4. Student-card PDF: is the page layout right (compare with a 2025 card)?
+5. Session e-mail list (`email name` per line, parents as "Name (parent of Student)"): does the mailing-list server accept this format?
+6. Dashboard "Max" per course: show the current limit (now) or the soft max?
+7. Mail-merge exports (admission, reminders): which columns exactly (Daniel, 9 Nov 2026)?
+
+### Open items
 - **Colleague access to the master Sheet** (parked by Daniel, 7 Nov 2026). With the `drive.file` scope a colleague can't open a Sheet Daniel created, even when it's shared in Drive. Options:
   - (a) *Google Picker* (recommended): the colleague picks the Sheet once in Google's file chooser; keeps the narrow permission. Needs the Picker API enabled and a browser API key restricted to `drmayerson.github.io` (~5 min setup).
   - (b) *Broader `spreadsheets` scope*: no picker, but the app gets access to all of the colleague's Sheets.
   - Either way: every colleague must be added as a test user (Google Cloud → Audience) while the app stays in testing mode (max. 100 users). The "Copy app link to this Sheet" link already exists for handing out the Sheet.
 - **Data protection:** DPO review before going live with real data, and the retention period for archived seasons (§2).
 - **Google account** that owns the master Sheet long-term: Daniel's own or a KU Leuven-linked account (§2).
-- **To confirm:** closing a young-student flag warns about "Student dorm OK" only for FULL students (EVENING/DAY students don't sleep in the dorms).
-- **To confirm:** proof "likely OK" = amount + (reference OR IBAN). Stricter (all three) is a one-line change.
-- **To confirm:** payments are matched automatically by e-mail and by a *unique* exact name (student or parent). Should name-only matches rather always be confirmed by hand?
-- **To decide:** how the proof files get from Outlook into a folder (Power Automate flow, `REMINDERS.md` item 3). The app needs unique names: save each attachment as `<payer e-mail>__<original name>` (the e-mail as given in the form, from the notification e-mail's body). A date/time prefix alone makes names unique but doesn't tie a file to its payment row.
-- **To revisit:** the columns of the admission and reminder mail-merge exports (Daniel, 9 Nov 2026).
-- **To do when available:** Daniel will provide sample course rosters → align the "Rosters & lists" exports with them.
-- **Not built:** the direct-API variant of the LLM steps; LLM help for payment leftovers (the fuzzy suggestions seem enough — revisit with real data).
+- **Proof files from Outlook** into one folder (Power Automate flow, `REMINDERS.md` item 3), each saved as `<payer e-mail>__<original name>` (the e-mail as given in the form, from the notification e-mail's body). A date/time prefix alone makes names unique but doesn't tie a file to its payment row.
 - **Real export details still unverified:** unticked checkbox value (empty vs `FALSE`); whether the fraction of a second in Posting Date/Time is always 6 digits (§8). Blank rows, BOM and unpadded time parts are handled.
-- **LLM delivery mechanism** for phase 4: export/import JSON files (default) or a direct API call with Daniel's own key (§6).
 - **New-season form changes** (payment form e-mail label + session radio button, proof-of-payment folder): see `REMINDERS.md`.
+- **Not built:** the direct-API variant of the LLM steps; LLM help for payment leftovers (the fuzzy suggestions seem enough — revisit with real data).
