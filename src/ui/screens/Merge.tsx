@@ -113,7 +113,7 @@ function Group({ earliestId, flags, cfg }: { earliestId: string; flags: Row[]; c
           <button
             onClick={() =>
               run(
-                () => repo.setFlagStatus(l.flag[FLAG_COLS.flagId], 'overruled', notes[l.flag[FLAG_COLS.flagId]] || 'not a duplicate'),
+                () => repo.keepSeparate(l.flag[FLAG_COLS.flagId], notes[l.flag[FLAG_COLS.flagId]] || 'not a duplicate'),
                 `${l.app[APP_COLS.id]} kept as a separate application.`,
               )
             }

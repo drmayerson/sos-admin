@@ -21,6 +21,8 @@ export interface SheetsApi {
   appendColumns(sheetId: number, count: number): Promise<void>;
   /** Warning-only protection on whole tabs (editing shows a "are you sure" warning in Google Sheets). */
   protectSheets(sheetIds: number[], description: string): Promise<void>;
+  /** Format whole tabs as plain text, so values typed by hand (TRUE, 20-7-2026, 12,5) stay exactly as typed. */
+  formatAsText(sheetIds: number[]): Promise<void>;
 }
 
 const BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
@@ -56,18 +58,27 @@ export class HttpSheetsApi implements SheetsApi {
     return (await res.json()).spreadsheetId as string;
   }
 
-  private async call<T>(path: string, init: RequestInit = {}, attempt = 0): Promise<T> {
-    const res = await fetch(`${BASE}/${this.spreadsheetId}${path}`, {
-      ...init,
-      headers: { Authorization: `Bearer ${await this.token()}`, 'Content-Type': 'application/json' },
-    });
+  /**
+   * One API call. 401 → renew the token once; 429 (quota) → wait and retry; 5xx → retry only when `retry5xx`
+   * (not for appends: Google may have applied an append that returned an error, and retrying would duplicate rows).
+   */
+  private async call<T>(path: string, init: RequestInit = {}, attempt = 0, retry5xx = true): Promise<T> {
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}/${this.spreadsheetId}${path}`, {
+        ...init,
+        headers: { Authorization: `Bearer ${await this.token()}`, 'Content-Type': 'application/json' },
+      });
+    } catch (e) {
+      throw new Error(`No connection to Google Sheets (${e instanceof Error ? e.message : e}). Check the internet connection and try again.`);
+    }
     if (res.status === 401 && attempt === 0) {
       await this.onUnauthorized();
-      return this.call(path, init, attempt + 1);
+      return this.call(path, init, attempt + 1, retry5xx);
     }
-    if ((res.status === 429 || res.status >= 500) && attempt < 5) {
+    if ((res.status === 429 || (retry5xx && res.status >= 500)) && attempt < 5) {
       await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
-      return this.call(path, init, attempt + 1);
+      return this.call(path, init, attempt + 1, retry5xx);
     }
     if (!res.ok) {
       let msg = await res.text();
@@ -105,10 +116,12 @@ export class HttpSheetsApi implements SheetsApi {
 
   async appendRows(range: string, values: string[][]): Promise<void> {
     if (values.length === 0) return;
-    await this.call(`/values/${encodeURIComponent(range)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
-      method: 'POST',
-      body: JSON.stringify({ values }),
-    });
+    await this.call(
+      `/values/${encodeURIComponent(range)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+      { method: 'POST', body: JSON.stringify({ values }) },
+      0,
+      false,
+    );
   }
 
   async clear(range: string): Promise<void> {
@@ -127,6 +140,18 @@ export class HttpSheetsApi implements SheetsApi {
     await this.call(':batchUpdate', {
       method: 'POST',
       body: JSON.stringify({ requests: sheetIds.map((sheetId) => ({ addProtectedRange: { protectedRange: { range: { sheetId }, description, warningOnly: true } } })) }),
+    });
+  }
+
+  async formatAsText(sheetIds: number[]): Promise<void> {
+    if (sheetIds.length === 0) return;
+    await this.call(':batchUpdate', {
+      method: 'POST',
+      body: JSON.stringify({
+        requests: sheetIds.map((sheetId) => ({
+          repeatCell: { range: { sheetId }, cell: { userEnteredFormat: { numberFormat: { type: 'TEXT' } } }, fields: 'userEnteredFormat.numberFormat' },
+        })),
+      }),
     });
   }
 

@@ -22,6 +22,8 @@ export class FakeSheetsApi implements SheetsApi {
     if (mm) return { title, r0: +mm[1] - 1, c0: 0, r1: +mm[2] - 1, c1: Infinity };
     mm = /^([A-Z]+):([A-Z]+)$/.exec(ref);
     if (mm) return { title, r0: 0, c0: col(mm[1]), r1: Infinity, c1: col(mm[2]) };
+    mm = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(ref);
+    if (mm) return { title, r0: +mm[2] - 1, c0: col(mm[1]), r1: +mm[4] - 1, c1: col(mm[3]) };
     mm = /^([A-Z]+)(\d+)$/.exec(ref);
     if (mm) return { title, r0: +mm[2] - 1, c0: col(mm[1]), r1: Infinity, c1: Infinity };
     throw new Error(`unsupported range ${range}`);
@@ -63,7 +65,9 @@ export class FakeSheetsApi implements SheetsApi {
 
   async batchUpdateValues(data: { range: string; values: string[][] }[]): Promise<void> {
     this.calls.writes++;
+    this.maybeFail('update', false);
     for (const d of data) this.write(d.range, d.values);
+    this.maybeFail('update', true);
   }
 
   async appendRows(range: string, values: string[][]): Promise<void> {
@@ -72,11 +76,31 @@ export class FakeSheetsApi implements SheetsApi {
     const g = this.grids.get(p.title)!;
     let last = g.cells.length;
     while (last > 0 && !(g.cells[last - 1] ?? []).some((c) => c)) last--;
+    this.maybeFail('append', false);
     this.write(`'${p.title}'!A${last + 1}`, values);
+    this.maybeFail('append', true);
   }
 
   async clear(range: string): Promise<void> {
-    this.grids.get(this.parse(range).title)!.cells = [];
+    const p = this.parse(range);
+    const g = this.grids.get(p.title)!;
+    if (p.r0 === 0 && p.c0 === 0 && p.r1 === Infinity && p.c1 === Infinity) {
+      g.cells = [];
+      return;
+    }
+    for (let r = p.r0; r <= Math.min(p.r1, g.cells.length - 1); r++)
+      for (let c = p.c0; c <= Math.min(p.c1, (g.cells[r] ?? []).length - 1); c++) if (g.cells[r]) g.cells[r][c] = '';
+  }
+
+  async formatAsText(): Promise<void> {}
+
+  /** Make the next call of a kind fail: before doing anything, or after applying it (like a timeout on the reply). */
+  failNext: { op: 'append' | 'update'; after: boolean } | null = null;
+  private maybeFail(op: 'append' | 'update', after: boolean) {
+    if (this.failNext && this.failNext.op === op && this.failNext.after === after) {
+      this.failNext = null;
+      throw new Error(`simulated ${op} failure`);
+    }
   }
 
   async addSheets(titles: string[]): Promise<void> {

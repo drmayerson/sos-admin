@@ -30,7 +30,7 @@ describe('decoding and parsing', () => {
   it('E28: an Excel re-save that kept UTF-8 is still caught by the dd/mm/yyyy birth dates', () => {
     const latin = new TextDecoder('windows-1252').decode(bytes('applications_2026_excel_mangled.csv'));
     const p = planImport({ csv: parseCsv(latin), cfg: cfg(), existingApps: [], existingRaw: [], importedAt: NOW });
-    expect(p.errors.join(' ')).toMatch(/dd\/mm\/yyyy/);
+    expect(p.errors.join(' ')).toMatch(/not written as yyyy-mm-dd/);
     expect(p.newApps).toHaveLength(0);
   });
 

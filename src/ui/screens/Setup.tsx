@@ -3,6 +3,7 @@ import { validateConfig } from '../../core/config';
 import { decodeUtf8, parseCsv } from '../../core/csv';
 import { checkMapping, type MappingCheck } from '../../core/headers';
 import { FIELD_KEYS, type Accommodation, type FieldKey, type PrereqMode, type SeasonConfig } from '../../core/types';
+import type { RepairReport } from '../../core/repo';
 import { useApp } from '../ctx';
 
 const ACC: Accommodation[] = ['FULL', 'EVENING', 'DAY'];
@@ -10,9 +11,13 @@ const ACC: Accommodation[] = ['FULL', 'EVENING', 'DAY'];
 export function Setup() {
   const { snap, repo, run } = useApp();
   const [c, setC] = useState<SeasonConfig | null>(() => (snap.cfg ? structuredClone(snap.cfg) : null));
+  // The settings as they were when the form was opened: if they change elsewhere meanwhile, warn before saving.
+  const [base, setBase] = useState(() => JSON.stringify(snap.cfg));
   const [check, setCheck] = useState<MappingCheck | null>(null);
   const [checkErr, setCheckErr] = useState('');
-  if (!c) return <p class="warn">No season config found. (Phase 2 adds the "Start new season" wizard.)</p>;
+  const [report, setReport] = useState<RepairReport | null>(null);
+  if (!c) return <p class="warn">No season config found. Create a master Sheet from the start screen first.</p>;
+  const changedElsewhere = JSON.stringify(snap.cfg) !== base;
 
   const upd = (f: (x: SeasonConfig) => void) => {
     const n = structuredClone(c);
@@ -42,6 +47,30 @@ export function Setup() {
     <div>
       <h1>Season setup</h1>
       <div class="panel">
+        <h2>Check and repair</h2>
+        <p class="small">
+          Re-checks every application: recalculates session/choices and fees, recreates missing flags (e.g. after an import
+          that failed halfway), closes flags that no longer apply, and reports problems that need you (duplicate IDs, broken
+          headers, invalid settings). Safe to run any time; it also runs after every import and every settings change.
+        </p>
+        <button disabled={repo.store.isDemo && snap.apps.length === 0} onClick={() => run(async () => setReport(await repo.recheckAll()), 'Check and repair done.')}>
+          Check and repair
+        </button>
+        {report && (
+          <div class={`msg ${report.problems.length ? 'warn' : 'ok'}`}>
+            {report.fixed.length === 0 && report.problems.length === 0 && 'Everything is in order.'}
+            {report.fixed.length > 0 && <div><b>Fixed:</b><ul>{report.fixed.map((f) => <li>{f}</li>)}</ul></div>}
+            {report.problems.length > 0 && <div><b>Needs you:</b><ul>{report.problems.map((p) => <li>{p}</li>)}</ul></div>}
+          </div>
+        )}
+      </div>
+      {changedElsewhere && (
+        <div class="msg warn">
+          The settings were changed elsewhere (e.g. a course limit on Assign courses) since this form was opened. Saving now
+          would overwrite that. <button onClick={() => { setC(structuredClone(snap.cfg)); setBase(JSON.stringify(snap.cfg)); }}>Reload the form</button>
+        </div>
+      )}
+      <div class="panel">
         <h2>General</h2>
         <div class="fields">
           <label>Season{txt(c.season, (v) => upd((x) => (x.season = v)))}</label>
@@ -55,13 +84,19 @@ export function Setup() {
       <div class="panel">
         <h2>Sessions</h2>
         <table><tbody>
-          <tr><th>Key</th><th>Label (exactly as in the form)</th><th>Start date</th><th>Dorm capacity</th></tr>
+          <tr><th>Key</th><th>Label (exactly as in the form)</th><th>Start date</th><th>Dorm capacity</th><th>Choice columns</th></tr>
           {c.sessions.map((s, i) => (
             <tr>
               <td>{s.key}</td>
               <td>{txt(s.label, (v) => upd((x) => (x.sessions[i].label = v)), 'wide')}</td>
               <td><input type="date" value={s.startDate} onInput={(e) => upd((x) => (x.sessions[i].startDate = (e.target as HTMLInputElement).value))} /></td>
               <td>{num(s.dormCapacity, (v) => upd((x) => (x.sessions[i].dormCapacity = v)))}</td>
+              <td>
+                <select value={String(s.choiceGroup)} onChange={(e) => upd((x) => (x.sessions[i].choiceGroup = Number((e.target as HTMLSelectElement).value)))}>
+                  <option value="1">"Session I: …" columns</option>
+                  <option value="2">"Session II: …" columns</option>
+                </select>
+              </td>
             </tr>
           ))}
         </tbody></table>
@@ -222,7 +257,7 @@ export function Setup() {
 
       <div class="sticky-actions">
         {errors.length > 0 && <span class="err-text">{errors.join(' ')}</span>}
-        <button class="primary" disabled={!dirty || errors.length > 0} onClick={() => run(() => repo.saveConfig(c), 'Season settings saved.')}>
+        <button class="primary" disabled={!dirty || errors.length > 0} onClick={() => run(async () => { await repo.saveConfig(c); setBase(JSON.stringify(c)); }, 'Season settings saved.')}>
           Save settings
         </button>
         {dirty && <button onClick={() => setC(structuredClone(snap.cfg))}>Discard</button>}

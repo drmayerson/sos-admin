@@ -1,3 +1,4 @@
+import { brusselsDate } from '../../core/dates';
 import { useState } from 'preact/hooks';
 import { sessionStats, STAFF_GROUPS, tshirtRows, tshirtTable } from '../../core/dashboard';
 import type { Who } from '../../core/exports';
@@ -136,7 +137,7 @@ export function Dashboard() {
           >
             Save staff sizes
           </button>
-          <button onClick={() => downloadWorkbook([{ sheet: 'T-shirts', rows: tshirtRows(t) }], `SOS-tshirts-${new Date().toISOString().slice(0, 10)}.xlsx`)}>
+          <button onClick={() => downloadWorkbook([{ sheet: 'T-shirts', rows: tshirtRows(t) }], `SOS-tshirts-${brusselsDate()}.xlsx`)}>
             Export to Excel
           </button>
         </div>

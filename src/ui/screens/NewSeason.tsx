@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { nextSeasonConfig } from '../../core/config';
-import { createSheet } from '../../store/connect';
+import { createSheet, remembered } from '../../store/connect';
 import { useApp } from '../ctx';
 
 /** Checklist from docs/REMINDERS.md (kept in sync by hand). */
@@ -20,6 +20,8 @@ export function NewSeason() {
   const [season, setSeason] = useState(cur ? String(Number(cur.season) + 1) : '');
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
+  // Set once the new Sheet exists: a retry after a failed archive step then doesn't create a second Sheet.
+  const [created, setCreated] = useState('');
   if (!cur) return <p class="warn">Set up the season first.</p>;
   if (cur.archived) return <p class="warn">This season is archived. Open the current season to start a new one.</p>;
   const next = /^\d{4}$/.test(season) ? nextSeasonConfig(cur, season) : null;
@@ -28,17 +30,24 @@ export function NewSeason() {
     if (!next) return;
     if (!confirm(`Create the master Sheet for season ${season} and archive season ${cur.season} (read-only from then on)?`)) return;
     setErr('');
+    let made = created;
     try {
-      setBusy('Creating the new Sheet…');
-      const schools = (await repo.store.readAll('Schools')).filter((s) => s.Verdict);
-      await createSheet(season, next, schools);
+      if (!made) {
+        setBusy('Creating the new Sheet…');
+        const schools = (await repo.store.readAll('Schools')).filter((s) => s.Verdict);
+        const previous = remembered().sheetId; // the Sheet open now; the new season links back to it
+        const { id } = await createSheet(season, next, schools, previous);
+        made = id;
+        setCreated(id);
+      }
       setBusy(`Archiving season ${cur.season}…`);
       await repo.archiveSeason();
       setBusy('Done — opening the new season…');
       location.hash = '#/setup';
       location.reload();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      const m = e instanceof Error ? e.message : String(e);
+      setErr(made ? `${m} — the new Sheet exists; press the button again to finish archiving.` : m);
       setBusy('');
     }
   };
@@ -71,7 +80,7 @@ export function NewSeason() {
         {repo.store.isDemo ? (
           <p class="muted">Not available in the demo (it needs a Google Sheet).</p>
         ) : (
-          <button class="primary" disabled={!next || !!busy} onClick={start}>Create season {season} and archive {cur.season}</button>
+          <button class="primary" disabled={!next || !!busy} onClick={start}>{created ? `Finish: archive ${cur.season}` : `Create season ${season} and archive ${cur.season}`}</button>
         )}
         {busy && <p class="muted">{busy}</p>}
         {err && <div class="msg err">{err}</div>}

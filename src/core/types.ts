@@ -31,6 +31,8 @@ export interface SessionConfig {
   /** yyyy-mm-dd */
   startDate: string;
   dormCapacity: number;
+  /** Which of the form's choice-column groups belong to this session: 1 = "Session I: …" columns, 2 = "Session II: …". */
+  choiceGroup: number;
 }
 
 export type Accommodation = 'FULL' | 'EVENING' | 'DAY';
@@ -66,6 +68,10 @@ export interface SeasonConfig {
   archived: boolean;
   /** Staff T-shirt counts typed in by hand: "S1|Teachers|M" → 4. */
   tshirtStaff: Record<string, number>;
+  /** Admission e-mails downloaded but not yet confirmed as sent (survives navigating away / closing the tab). */
+  pendingAdmission: { ids: string[]; deadline: string; date: string } | null;
+  /** Sheet ID of the previous (archived) season, if this season was started with "New season". */
+  previousSheetId: string;
 }
 
 /** Form fields the app knows about. The column map ties each to the current season's header text. */
@@ -139,6 +145,8 @@ export const APP_COLS = {
   reimbursement: 'Reimbursement',
   reimbursementNote: 'ReimbursementNote',
   reimbursedAt: 'ReimbursedAt',
+  /** Owed back to an active student whose amount due dropped below what they paid (aid granted after payment). */
+  refundDue: 'RefundDue',
   /** Phase 4 LLM motivation check result ("no flag" or the reason). */
   motivationCheck: 'MotivationCheck',
   notes: 'Notes',
@@ -150,7 +158,7 @@ export type FLStatus = 'claimed' | 'confirmed' | 'rejected' | 'n.a.';
 
 export const FLAG_TYPES = [
   'NO_COURSE_CHOSEN', 'UNKNOWN_COURSE', 'UNKNOWN_SESSION', 'BAD_BIRTH_DATE', 'YOUNG', 'TOO_OLD', 'SHORT_MOTIVATION',
-  'NEAR_DUPLICATE', 'PAYMENT_OVERDUE', 'FINAL_DEADLINE_PASSED', 'MOTIVATION_LLM', 'FL_SCHOOL', 'PREREQ_SOFT',
+  'NEAR_DUPLICATE', 'PAYMENT_OVERDUE', 'FINAL_DEADLINE_PASSED', 'MOTIVATION_LLM', 'FL_SCHOOL', 'PREREQ_SOFT', 'REAPPLICATION',
 ] as const;
 export type FlagType = (typeof FLAG_TYPES)[number];
 
@@ -218,5 +226,11 @@ export const PAY_COLS = {
   proofDetail: 'ProofDetail',
   /** IBAN the payment came from, read from the proof of payment (or typed in); used for reimbursements. */
   payerIban: 'PayerIBAN',
+  /** "TRUE" once a human confirmed PayerIBAN (until then it is a guess from the proof). */
+  payerIbanConfirmed: 'PayerIBANConfirmed',
+  /** All valid IBANs found on the proof, with the label in front of each ("Van rekening: BE71 …"). */
+  ibanCandidates: 'IBANCandidates',
+  /** Fingerprint (SHA-256) of the proof file, to spot the same screenshot used for two payments. */
+  proofHash: 'ProofHash',
   note: 'Note',
 } as const;

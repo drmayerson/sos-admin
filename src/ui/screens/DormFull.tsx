@@ -51,8 +51,8 @@ function DormRow({ n, a, cfg }: { n: number; a: Row; cfg: SeasonConfig }) {
       <td class="small">{fallback || <i>no answer</i>}</td>
       <td>
         <div class="row">
-          <button onClick={() => run(() => repo.setAccommodation(id, 'EVENING'), `${id} is now an EVENING student.`)}>→ EVENING</button>
-          <button onClick={() => run(() => repo.setAccommodation(id, 'DAY'), `${id} is now a DAY student.`)}>→ DAY</button>
+          <button onClick={() => confirm(`Make ${id} an EVENING student (no dorm; fee changes)? You can switch back to FULL on the application's Edit view.`) && run(() => repo.setAccommodation(id, 'EVENING'), `${id} is now an EVENING student.`)}>→ EVENING</button>
+          <button onClick={() => confirm(`Make ${id} a DAY student (no dorm; fee changes)? You can switch back to FULL on the application's Edit view.`) && run(() => repo.setAccommodation(id, 'DAY'), `${id} is now a DAY student.`)}>→ DAY</button>
         </div>
         <UnenrollButton app={a} />
       </td>

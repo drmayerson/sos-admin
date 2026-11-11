@@ -18,7 +18,7 @@ export function configFromJson(j: ConfigJson): SeasonConfig {
   return {
     season: j.season,
     idPrefix: j.idPrefix,
-    sessions: j.sessions.map((s) => ({ key: s.key, label: s.label, startDate: s.startDate, dormCapacity: s.dormCapacity })),
+    sessions: j.sessions.map((s, i) => ({ key: s.key, label: s.label, startDate: s.startDate, dormCapacity: s.dormCapacity, choiceGroup: i + 1 })),
     courses: j.sessions.flatMap((s) =>
       s.courses.map((c) => ({ session: s.key, ...c, limit: c.softMax, minAge: null, maxAge: null, yearsLeft: [], prereqMode: 'hard' as const, noPrereqs: false, prereqNote: '' })),
     ),
@@ -32,6 +32,8 @@ export function configFromJson(j: ConfigJson): SeasonConfig {
     flemishStatusValue: FLEMISH_STATUS_2026,
     archived: false,
     tshirtStaff: {},
+    pendingAdmission: null,
+    previousSheetId: '',
   };
 }
 
@@ -56,6 +58,8 @@ export function configToTables(c: SeasonConfig): ConfigTables {
     ['flemishStatusValue', c.flemishStatusValue],
     ['archived', c.archived ? 'TRUE' : ''],
     ['tshirtStaff', JSON.stringify(c.tshirtStaff ?? {})],
+    ['pendingAdmission', c.pendingAdmission ? JSON.stringify(c.pendingAdmission) : ''],
+    ['previousSheetId', c.previousSheetId ?? ''],
     ['threshold.youngMaxAge', String(c.thresholds.youngMaxAge)],
     ['threshold.youngYearsLeft', c.thresholds.youngYearsLeft],
     ['threshold.oldMinAge', String(c.thresholds.oldMinAge)],
@@ -68,7 +72,7 @@ export function configToTables(c: SeasonConfig): ConfigTables {
   ];
   return {
     Config: kv.map(([Key, Value]) => ({ Key, Value })),
-    Sessions: c.sessions.map((s) => ({ Key: s.key, Label: s.label, StartDate: s.startDate, DormCapacity: String(s.dormCapacity) })),
+    Sessions: c.sessions.map((s) => ({ Key: s.key, Label: s.label, StartDate: s.startDate, DormCapacity: String(s.dormCapacity), ChoiceColumns: String(s.choiceGroup) })),
     Courses: c.courses.map((x) => ({
       Session: x.session,
       Code: x.code,
@@ -104,6 +108,8 @@ export function configFromTables(t: ConfigTables): SeasonConfig {
     flemishStatusValue: kv.get('flemishStatusValue') ?? FLEMISH_STATUS_2026,
     archived: kv.get('archived') === 'TRUE',
     tshirtStaff: parseJson(kv.get('tshirtStaff')),
+    pendingAdmission: parsePending(kv.get('pendingAdmission')),
+    previousSheetId: kv.get('previousSheetId') ?? '',
     thresholds: {
       youngMaxAge: num('threshold.youngMaxAge'),
       youngYearsLeft: kv.get('threshold.youngYearsLeft') ?? '>2',
@@ -112,7 +118,14 @@ export function configFromTables(t: ConfigTables): SeasonConfig {
     },
     fees: Object.fromEntries(ACC.map((a) => [a, { FL: num(`fee.${a}.FL`), other: num(`fee.${a}.other`) }])) as SeasonConfig['fees'],
     columnMap,
-    sessions: t.Sessions.map((r) => ({ key: r.Key, label: r.Label, startDate: r.StartDate, dormCapacity: Number(r.DormCapacity) })),
+    // The choice-column group is stored per session (not taken from the row order, which a hand edit could change).
+    sessions: t.Sessions.map((r, i) => ({
+      key: r.Key,
+      label: r.Label,
+      startDate: r.StartDate,
+      dormCapacity: (r.DormCapacity ?? '').trim() === '' ? NaN : Number(r.DormCapacity),
+      choiceGroup: Number(r.ChoiceColumns) || inferChoiceGroup(r.Label, i),
+    })),
     courses: t.Courses.map((r) => ({
       session: r.Session,
       code: r.Code,
@@ -127,6 +140,15 @@ export function configFromTables(t: ConfigTables): SeasonConfig {
       prereqNote: r.PrerequisiteNote ?? '',
     })),
   };
+}
+
+function parsePending(s: string | undefined): SeasonConfig['pendingAdmission'] {
+  try {
+    const v = JSON.parse(s || 'null');
+    return v && Array.isArray(v.ids) && typeof v.deadline === 'string' && typeof v.date === 'string' ? v : null;
+  } catch {
+    return null;
+  }
 }
 
 function parseJson(s: string | undefined): Record<string, number> {
@@ -150,7 +172,13 @@ export function validateConfig(c: SeasonConfig): string[] {
     keys.add(s.key);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s.startDate)) errs.push(`Session ${s.key}: start date must be yyyy-mm-dd.`);
     if (!s.label.trim()) errs.push(`Session ${s.key}: label (as in the form) is empty.`);
+    if (!(Number.isInteger(s.dormCapacity) && s.dormCapacity >= 0)) errs.push(`Session ${s.key}: dorm capacity must be a whole number ≥ 0.`);
+    if (![1, 2].includes(s.choiceGroup)) errs.push(`Session ${s.key}: choice columns must be 1 (Session I columns) or 2 (Session II columns).`);
   }
+  for (const [acc, f] of Object.entries(c.fees))
+    if (!(f.FL > 0 && f.other > 0)) errs.push(`Fee for ${acc} must be more than 0 (Flemish and other).`);
+  if (!(c.paymentDeadlineDays >= 1)) errs.push('Payment deadline must be at least 1 day.');
+  if (!(c.reminderDays >= 1)) errs.push('Reminder deadline must be at least 1 day.');
   const codes = new Set<string>();
   for (const x of c.courses) {
     if (!keys.has(x.session)) errs.push(`Course ${x.code}: unknown session ${x.session}.`);
@@ -158,6 +186,7 @@ export function validateConfig(c: SeasonConfig): string[] {
     codes.add(x.code);
     if (!(x.softMax > 0 && x.hardMax >= x.softMax)) errs.push(`Course ${x.code}: need 0 < soft max ≤ hard max.`);
     if (!(x.limit > 0 && x.limit <= x.hardMax)) errs.push(`Course ${x.code}: current limit must be between 1 and the hard max.`);
+    if (!x.code.trim()) errs.push('A course has no code.');
     if (x.minAge !== null && !(x.minAge > 0 && x.minAge < 30)) errs.push(`Course ${x.code}: minimum age looks wrong.`);
     if (x.maxAge !== null && !(x.maxAge > 0 && x.maxAge < 30)) errs.push(`Course ${x.code}: maximum age looks wrong.`);
     if (x.minAge !== null && x.maxAge !== null && x.minAge > x.maxAge) errs.push(`Course ${x.code}: minimum age is above the maximum age.`);
@@ -170,15 +199,23 @@ export function validateConfig(c: SeasonConfig): string[] {
  * in config order. Returns, per session key, the column-map fields for its 1st/2nd/3rd choice.
  */
 export function choiceFields(c: SeasonConfig): Record<string, [FieldKey, FieldKey, FieldKey]> {
-  const groups: [FieldKey, FieldKey, FieldKey][] = [
-    ['s1c1', 's1c2', 's1c3'],
-    ['s2c1', 's2c2', 's2c3'],
-  ];
+  const groups: Record<number, [FieldKey, FieldKey, FieldKey]> = {
+    1: ['s1c1', 's1c2', 's1c3'],
+    2: ['s2c1', 's2c2', 's2c3'],
+  };
   const out: Record<string, [FieldKey, FieldKey, FieldKey]> = {};
   c.sessions.forEach((s, i) => {
-    if (groups[i]) out[s.key] = groups[i];
+    const g = groups[s.choiceGroup || i + 1];
+    if (g) out[s.key] = g;
   });
   return out;
+}
+
+/** Older Sheets have no ChoiceColumns column: "Session II …" → 2, "Session I …" → 1, else the row order. */
+function inferChoiceGroup(label: string, index: number): number {
+  if (/^\s*session\s+ii\b/i.test(label ?? '')) return 2;
+  if (/^\s*session\s+i\b/i.test(label ?? '')) return 1;
+  return index + 1;
 }
 
 /** Courses with neither a prerequisite rule nor an explicit "no prerequisites" tick (assignment refuses to run). */

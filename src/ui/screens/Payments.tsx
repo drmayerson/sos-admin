@@ -1,3 +1,4 @@
+import { brusselsDate } from '../../core/dates';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { isActive, stageOf } from '../../core/assign';
 import { decodeUtf8, parseCsv } from '../../core/csv';
@@ -5,7 +6,7 @@ import { addDays } from '../../core/admission';
 import { awaitingPayment, effectiveDeadline, isOverdue, REMINDER_COLUMNS, reminderRows } from '../../core/deadlines';
 import { parseAmount } from '../../core/fees';
 import { field } from '../../core/flags';
-import { idList, type PaymentPlan } from '../../core/payments';
+import { idList, NAME_ONLY, type PaymentPlan } from '../../core/payments';
 import { analyzeProof, pairProofFiles, type Pairing } from '../../core/proof';
 import { fold } from '../../core/text';
 import { APP_COLS, PAY_COLS, type Row, type SeasonConfig } from '../../core/types';
@@ -14,7 +15,7 @@ import { fullName, useApp } from '../ctx';
 import { UnenrollButton } from '../Unenroll';
 import { extractText } from '../ocr';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => brusselsDate();
 
 // ---------------------------------------------------------------- import
 
@@ -221,6 +222,12 @@ function AppDetails({ id }: { id: string }) {
 
 // ---------------------------------------------------------------- proof check
 
+/** SHA-256 of a file, computed in the browser: spots the same screenshot used for two payments. */
+async function fileHash(f: File): Promise<string> {
+  const d = await crypto.subtle.digest('SHA-256', await f.arrayBuffer());
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 /** Proof files dropped in this session: kept in memory only (never stored, never uploaded). */
 let proofFiles: File[] = [];
 
@@ -254,26 +261,32 @@ export function Proofs() {
   const check = async (p: Row) => {
     const f = fileFor(p[PAY_COLS.paymentId]);
     if (!f) return;
+    const hash = await fileHash(f);
     const { text, how } = await extractText(f);
     const a = analyzeProof(text, { amounts: [expected(p)], reference: cfg.paymentReference, iban: cfg.paymentIban });
-    await repo.setProofCheck(p[PAY_COLS.paymentId], a.verdict, `${f.name} (${how}): ${a.detail}${a.payerIbans[0] ? `; paid from ${a.payerIbans[0]}` : ''}`, a.payerIbans[0] ?? '');
+    await repo.setProofCheck(p[PAY_COLS.paymentId], a.verdict, `${f.name} (${how}): ${a.detail}${a.payerIbans[0] ? `; paid from ${a.payerIbans[0]} (to confirm)` : ''}`, a.payerIbans[0] ?? '', {
+      candidates: a.candidates,
+      hash,
+    });
   };
-  const checkAll = async () => {
-    const list = todo.filter((p) => fileFor(p[PAY_COLS.paymentId]) && !p[PAY_COLS.proofStatus]);
-    let i = 0;
-    for (const p of list) {
-      setBusy(`Reading proof ${++i} of ${list.length}… (the first one loads the text-recognition engine)`);
-      try {
-        await check(p);
-      } catch (e) {
-        await repo.setProofCheck(p[PAY_COLS.paymentId], 'needs-review', `could not read: ${e instanceof Error ? e.message : e}`);
+  const checkAll = () =>
+    run(async () => {
+      const list = todo.filter((p) => fileFor(p[PAY_COLS.paymentId]) && !p[PAY_COLS.proofStatus]);
+      let i = 0;
+      for (const p of list) {
+        setBusy(`Reading proof ${++i} of ${list.length}… (the first one loads the text-recognition engine)`);
+        try {
+          await check(p);
+        } catch (e) {
+          await repo.setProofCheck(p[PAY_COLS.paymentId], 'needs-review', `could not read: ${e instanceof Error ? e.message : e}`);
+        }
       }
-    }
-    setBusy('');
-    await run(async () => {}, `Checked ${list.length} proof(s).`);
-  };
+      setBusy('');
+    }, 'Proofs checked.');
 
-  const likely = todo.filter((p) => p[PAY_COLS.proofStatus] === 'likely-ok');
+  // Name-only links (no e-mail match) are never approved in bulk: amount, reference and IBAN are the same for everyone.
+  const likely = todo.filter((p) => p[PAY_COLS.proofStatus] === 'likely-ok' && p[PAY_COLS.matchMethod] !== NAME_ONLY);
+  const nameOnly = todo.filter((p) => p[PAY_COLS.proofStatus] === 'likely-ok' && p[PAY_COLS.matchMethod] === NAME_ONLY).length;
   return (
     <div>
       <h1>Proof of payment</h1>
@@ -314,6 +327,7 @@ export function Proofs() {
             Approve all {likely.length} "likely OK"
           </button>
         )}
+        {nameOnly > 0 && <span class="small muted">{nameOnly} "likely OK" linked on the name only: approve those one by one.</span>}
         <select value={filter} onChange={(e) => setFilter((e.target as HTMLSelectElement).value as 'todo' | 'all')}>
           <option value="todo">To decide</option>
           <option value="all">All linked payments</option>
@@ -376,7 +390,19 @@ function ProofRow(props: { p: Row; cfg: SeasonConfig; expected: number; pairing?
         ) : (
           <div class="row">
             <input placeholder="Note" value={note} onInput={(e) => setNote((e.target as HTMLInputElement).value)} />
-            <button class="primary" onClick={() => run(() => repo.approvePayment(id, note), `${id} approved: marked paid.`)}>Approve</button>
+            <button
+              class="primary"
+              onClick={() => {
+                // When the check didn't find the expected amount, ask what was actually paid.
+                if (status !== 'likely-ok' && idList(p[PAY_COLS.matchedApps]).length === 1) {
+                  const amount = prompt(`The expected amount (${expected} EUR) was not confirmed. Amount actually paid (EUR):`, String(expected));
+                  if (amount === null) return;
+                  run(() => repo.approvePayment(id, note, amount), `${id} approved: marked paid (${amount} EUR).`);
+                } else run(() => repo.approvePayment(id, note), `${id} approved: marked paid.`);
+              }}
+            >
+              Approve
+            </button>
             <button onClick={() => run(() => repo.rejectProof(id, note || 'proof not OK'), `${id}: proof rejected.`)}>Reject</button>
           </div>
         )}
@@ -465,7 +491,21 @@ export function Unpaid() {
               <td>{a[APP_COLS.admittedAt]}</td>
               <td>{effectiveDeadline(a)}{isOverdue(a, t) && <span class="badge warnb">overdue</span>}{a[APP_COLS.finalReminder] === 'TRUE' && <span class="badge">final</span>}</td>
               <td class="small">{reminders.length ? reminders.join(' · ') : '—'}</td>
-              <td><UnenrollButton app={a} /></td>
+              <td class="nowrap">
+                <button
+                  onClick={() => {
+                    const note = prompt(`Mark ${id} ${fullName(a, cfg)} as PAID without a payment-form row.\n\nHow was the payment confirmed? (required, logged)`);
+                    if (!note || !note.trim()) return;
+                    const amount = prompt('Amount paid (EUR):', a[APP_COLS.amountDue] || '');
+                    if (amount === null) return;
+                    if (!confirm(`Mark ${id} paid (${amount} EUR): "${note}"?`)) return;
+                    run(() => repo.markPaidByHand(id, note, amount), `${id} marked paid by hand.`);
+                  }}
+                >
+                  Mark paid…
+                </button>{' '}
+                <UnenrollButton app={a} />
+              </td>
             </tr>
           );
         })}
@@ -481,7 +521,18 @@ export function Unpaid() {
               <td>{a[APP_COLS.paidAt]}</td>
               <td>{a[APP_COLS.amountPaid] || a[APP_COLS.amountDue]}</td>
               <td>{a[APP_COLS.paymentIds]}</td>
-              <td><UnenrollButton app={a} label="Unenroll (paid)…" /></td>
+              <td class="nowrap">
+                <button
+                  onClick={() => {
+                    const reason = prompt(`Undo "paid" for ${a[APP_COLS.id]} ${fullName(a, cfg)}? They go back to "awaiting payment" (approved payment rows go back to "to check").\n\nReason (required, logged):`);
+                    if (!reason || !reason.trim()) return;
+                    run(() => repo.undoPaid(a[APP_COLS.id], reason), `${a[APP_COLS.id]}: "paid" undone.`);
+                  }}
+                >
+                  Undo paid…
+                </button>{' '}
+                <UnenrollButton app={a} label="Unenroll (paid)…" />
+              </td>
             </tr>
           ))}
         </tbody></table>

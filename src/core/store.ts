@@ -22,6 +22,11 @@ export interface TableStore {
   refresh?(): void;
   /** Protect all tabs against accidental edits (archived seasons). */
   protect?(): Promise<void>;
+  /**
+   * Called at the start of every user action that changes data, inside the click: e.g. renew a Google token that
+   * expires soon (a pop-up is only allowed during a click) so the action can't fail halfway.
+   */
+  prepare?(): Promise<void>;
 }
 
 /** Wraps a store so that every write fails: used for archived seasons. */
@@ -37,6 +42,9 @@ export class ReadOnlyStore implements TableStore {
   }
   refresh() {
     this.inner.refresh?.();
+  }
+  prepare() {
+    return this.inner.prepare?.() ?? Promise.resolve();
   }
   private no(): Promise<void> {
     return Promise.reject(new Error('This season is archived: it can only be viewed, not changed.'));

@@ -17,9 +17,13 @@ export class SheetsStore implements TableStore {
   constructor(
     private api: SheetsApi,
     readonly label: string,
+    private beforeMutation: () => Promise<void> = async () => {},
   ) {}
 
-  /** Make sure all tabs exist. Call once after connecting. */
+  /**
+   * Make sure all tabs exist, and format them as plain text so values typed into the Sheet by hand stay exactly as
+   * typed (Google would otherwise turn "TRUE", "20-7-2026" or "12,5" into locale-dependent booleans/dates/numbers).
+   */
   async init(): Promise<void> {
     await this.loadSheetInfo();
     const missing = TABLES.filter((t) => !this.sheets.has(t));
@@ -27,6 +31,11 @@ export class SheetsStore implements TableStore {
       await this.api.addSheets(missing);
       await this.loadSheetInfo();
     }
+    await this.api.formatAsText([...this.sheets.values()].filter((s) => (TABLES as readonly string[]).includes(s.title)).map((s) => s.sheetId));
+  }
+
+  prepare(): Promise<void> {
+    return this.beforeMutation();
   }
 
   refresh(): void {
@@ -50,8 +59,34 @@ export class SheetsStore implements TableStore {
   async append(table: TableName, rows: Row[]): Promise<void> {
     if (rows.length === 0) return;
     const header = await this.ensureHeader(table, rows.flatMap((r) => Object.keys(r)));
-    await this.api.appendRows(`${tab(table)}!A1`, rows.map((r) => header.map((h) => r[h] ?? '')));
+    const before = await this.rowCount(table);
+    try {
+      await this.api.appendRows(`${tab(table)}!A1`, rows.map((r) => header.map((h) => r[h] ?? '')));
+    } catch (e) {
+      // The append may have been applied although an error came back (timeout, 5xx). Never retry blindly:
+      // count the rows to find out what happened.
+      let after = -1;
+      try {
+        after = await this.rowCount(table);
+      } catch {
+        /* still offline: report the original error */
+      }
+      if (after === before + rows.length) {
+        this.cache.delete(table);
+        return; // it did arrive
+      }
+      this.cache.delete(table);
+      if (after > before)
+        throw new Error(`${table}: only part of the rows may have been written (${e instanceof Error ? e.message : e}). Use "Check and repair" in Season setup.`);
+      throw e;
+    }
     this.cache.get(table)?.push(...rows.map((r) => ({ ...r })));
+  }
+
+  /** Number of non-empty rows below the header, read fresh. */
+  private async rowCount(table: TableName): Promise<number> {
+    const [values] = await this.api.batchGet([`${tab(table)}!A:A`]);
+    return values.slice(1).filter((r) => r.some((c) => c !== '')).length;
   }
 
   async update(table: TableName, keyCol: string, updates: { key: string; values: Row }[]): Promise<void> {
@@ -78,11 +113,20 @@ export class SheetsStore implements TableStore {
     if (cached) for (const u of updates) Object.assign(cached.find((r) => r[keyCol] === u.key) ?? {}, u.values);
   }
 
+  /**
+   * Replace a small tab (Config/Sessions/Courses): write the new content FIRST, then clear what's left of the old
+   * content below and to the right. A failure in between never leaves the tab empty.
+   */
   async replace(table: TableName, rows: Row[]): Promise<void> {
     const header = [...new Set(rows.flatMap((r) => Object.keys(r)))];
-    await this.ensureColumns(table, header.length);
-    await this.api.clear(tab(table));
+    const [old] = await this.api.batchGet([tab(table)]);
+    const oldRows = old.length;
+    const oldCols = old.reduce((m, r) => Math.max(m, r.length), 0);
+    await this.ensureColumns(table, Math.max(header.length, 1));
     await this.api.batchUpdateValues([{ range: `${tab(table)}!A1`, values: [header, ...rows.map((r) => header.map((h) => r[h] ?? ''))] }]);
+    const newRows = rows.length + 1;
+    if (oldRows > newRows) await this.api.clear(`${tab(table)}!A${newRows + 1}:${colLetter(Math.max(oldCols, header.length) - 1)}${oldRows}`);
+    if (oldCols > header.length) await this.api.clear(`${tab(table)}!${colLetter(header.length)}1:${colLetter(oldCols - 1)}${Math.max(oldRows, newRows)}`);
     this.cache.set(table, rows.map((r) => ({ ...r })));
   }
 

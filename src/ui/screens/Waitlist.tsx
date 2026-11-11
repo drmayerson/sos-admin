@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { isActive, priorityCompare } from '../../core/assign';
+import { isActive, pinWarnings, priorityCompare } from '../../core/assign';
 import { countsAsFlemish } from '../../core/fees';
 import { APP_COLS, type Row, type SeasonConfig } from '../../core/types';
 import { choicesText, fmtTime, fullName, useApp } from '../ctx';
@@ -56,7 +56,7 @@ export function Waitlist() {
 }
 
 function WaitRow({ n, a, cfg }: { n: number; a: Row; cfg: SeasonConfig }) {
-  const { repo, run } = useApp();
+  const { snap, repo, run } = useApp();
   const [course, setCourse] = useState('');
   const courses = cfg.courses.filter((c) => c.session === a[APP_COLS.session]);
   return (
@@ -73,7 +73,16 @@ function WaitRow({ n, a, cfg }: { n: number; a: Row; cfg: SeasonConfig }) {
           <option value="">—</option>
           {courses.map((c) => <option>{c.code}</option>)}
         </select>
-        <button disabled={!course} onClick={() => run(() => repo.pin(a[APP_COLS.id], course), `${a[APP_COLS.id]} assigned to ${course}.`)}>Assign</button>
+        <button
+          disabled={!course}
+          onClick={() => {
+            const w = pinWarnings(a, course, snap.apps, cfg);
+            if (w.length && !confirm(`Assign ${a[APP_COLS.id]} to ${course} anyway?\n\n- ${w.join('\n- ')}`)) return;
+            run(() => repo.pin(a[APP_COLS.id], course), `${a[APP_COLS.id]} assigned to ${course}.`);
+          }}
+        >
+          Assign
+        </button>
       </td>
     </tr>
   );

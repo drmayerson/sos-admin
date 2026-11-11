@@ -132,3 +132,13 @@ button.danger:hover:not(:disabled) { background: #8f1c13; }
 tr.hl td { background: #f6e6ec; }
 tr.row-full td { background: #eef3fb; }
 tr.block-head td { background: #eef1f5; }
+.busy-overlay, .idle-overlay { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; }
+.busy-overlay { background: rgba(255, 255, 255, 0.45); cursor: progress; }
+.idle-overlay { background: var(--bg); cursor: pointer; }
+.busy-box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 22px; box-shadow: 0 6px 24px rgba(0,0,0,0.15); font-weight: 600; }
+.problem-banner { background: var(--err); border-bottom: 2px solid var(--err-line); padding: 8px 16px; }
+.problem-banner ul { margin: 4px 0; }
+mark.hint { background: #ffe58f; padding: 0 1px; }
+.review-list { max-height: 420px; overflow: auto; border: 1px solid var(--line); background: #fff; padding: 6px 10px; }
+.review-item { border-bottom: 1px solid var(--line); padding: 6px 0; white-space: pre-wrap; font-size: 0.85rem; }
+input.invalid { border-color: #b42318; background: #fdecec; }

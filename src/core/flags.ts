@@ -91,6 +91,8 @@ export interface FlagReconciliation {
   create: NewFlag[];
   /** Open automatic flags that no longer apply → close as resolved. */
   close: string[];
+  /** Open automatic flags whose detail text is out of date (e.g. age changed after an edit). */
+  update: { flagId: string; detail: string }[];
 }
 
 /**
@@ -104,5 +106,10 @@ export function reconcileAutoFlags(row: Row, existingFlags: Row[], cfg: SeasonCo
   const close = mine
     .filter((f) => f[FLAG_COLS.status] === 'open' && !now.some((n) => n.type === f[FLAG_COLS.type]))
     .map((f) => f[FLAG_COLS.flagId]);
-  return { create, close };
+  const update = mine
+    .filter((f) => f[FLAG_COLS.status] === 'open')
+    .map((f) => ({ f, n: now.find((x) => x.type === f[FLAG_COLS.type]) }))
+    .filter(({ f, n }) => n && n.detail !== f[FLAG_COLS.detail])
+    .map(({ f, n }) => ({ flagId: f[FLAG_COLS.flagId], detail: n!.detail }));
+  return { create, close, update };
 }

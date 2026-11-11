@@ -1,3 +1,4 @@
+import { brusselsDate } from '../../core/dates';
 import { useState } from 'preact/hooks';
 import { courseRosters, dormList, medicalDietaryList, noPhotoList, studentsAt, type Who } from '../../core/exports';
 import { courseCards, courseMailingCsv, sessionEmailList } from '../../core/rosters';
@@ -16,7 +17,7 @@ export function Exports() {
   const cfg = snap.cfg;
   const list = studentsAt(snap.apps, who);
   const n = list.length;
-  const day = new Date().toISOString().slice(0, 10);
+  const day = brusselsDate();
   const med = medicalDietaryList(snap.apps, cfg, who);
   const pdf = async (course: string | null) => {
     setBusy('Making the PDF…');

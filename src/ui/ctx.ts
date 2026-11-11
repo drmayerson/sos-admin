@@ -9,9 +9,14 @@ export interface Ctx {
   snap: Snapshot;
   /** Re-read everything from the store after a change. */
   reload: () => Promise<void>;
-  /** Run an action with error reporting + reload. */
+  /** Run an action with error reporting + reload. Only one at a time; returns false when refused or failed. */
   run: (what: () => Promise<unknown>, done?: string) => Promise<boolean>;
+  /** An action is running (the screen is blocked meanwhile). */
+  busy: boolean;
 }
+
+/** Today's calendar date in Belgium (yyyy-mm-dd). */
+export { brusselsDate as today } from '../core/dates';
 
 export const AppCtx = createContext<Ctx>(null as unknown as Ctx);
 export const useApp = () => useContext(AppCtx);

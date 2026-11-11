@@ -32,8 +32,9 @@ export function deadlineFlags(apps: Row[], existing: Row[], today: string): Dead
     const type = final ? 'FINAL_DEADLINE_PASSED' : 'PAYMENT_OVERDUE';
     const detail = final
       ? `Final payment deadline ${d} passed without payment — decide (e.g. unassign/withdraw).`
-      : `Payment deadline ${d} passed; ${a[APP_COLS.amountDue] || '?'} EUR due.`;
-    if (existing.some((f) => f.AppID === a[APP_COLS.id] && f.Type === type && f.Detail === detail)) continue;
+      : `Payment deadline ${d} passed without payment.`;
+    // Once per student, type and deadline (the amount may change later, e.g. aid; that's no new deadline).
+    if (existing.some((f) => f.AppID === a[APP_COLS.id] && f.Type === type && (f.Detail ?? '').includes(`deadline ${d} `))) continue;
     out.push({ appId: a[APP_COLS.id], type, detail });
   }
   return out;

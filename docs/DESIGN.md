@@ -172,6 +172,30 @@ Automate the Summer of Science application workflow (intake → checks → cours
 - Whether the original download contains blank rows (the sample had many, probably from clearing data in Excel). Skip them either way.
 - Unticked checkbox value (empty vs `FALSE`).
 
+### Independent review (10 Nov 2026) — decisions and fixes (11 Nov 2026, as built)
+The review is in `docs/REVIEW_2026-11-10.md` (not committed). Daniel's decisions:
+- **Locking:** *every* open flag on a student blocks locking (besides inactive, no course, dorm waiting, FL school still "claimed", young OK for another course). Of an unmerged near-duplicate pair only the earliest application gets a seat; the later one waits until the pair is merged or kept separate ("Keep separate" gives it its own person key).
+- **Soft priority:** a student whose higher choice fails a soft prerequisite keeps the seat of a lower choice (held as fallback) and moves up only if the preferred course still has room after everyone else is placed; never ends up with no seat because of it.
+- **Reinstating** an unenrolled/withdrawn student restores the old course if it still has a place; otherwise they become active and unassigned (lock and admission cleared, payments kept). The confirmation says which.
+- **Fees follow changes:** no freezing at admission. Changing fees or financial aid (also after admission) recalculates every row; a student who already paid more than the new amount gets `RefundDue` and appears under *Unenrolled after paid → Refund owed after financial aid*.
+- **Paid by hand:** "Mark paid…" (Awaiting payment; note + amount required) and "Undo paid…" (Paid list; reason required), both audited. Full aid never leaves 0 to pay (Daniel), so no automatic "paid" for 0.
+- **Re-application:** an application from someone whose earlier application for that session was withdrawn is a new application with a `REAPPLICATION` flag (not an exact duplicate).
+- **Medical/dietary data** stays visible directly in the student's Full view.
+- **Hosting** stays on public GitHub Pages for now (see open items).
+Fixes made without needing a decision:
+- **Dates** ("today", deadlines, admission dates) are Brussels calendar dates, also on a laptop set to another time zone; the lock deadline is end-of-day Brussels.
+- **Import:** an Excel-re-saved export (dd/mm/yyyy birth dates, phone numbers without leading 0/+) is refused with an explanation; Sheet tabs are formatted as plain text so Google doesn't convert values.
+- **Robustness:** one action at a time (screen blocked meanwhile); the sign-in token is refreshed before each action; an idle screen locks after a while; a failed write mid-import says so and **Season setup → Check and repair** recreates missing flags, recalculates derived/fee columns and lists problems that need a human (duplicate IDs, broken headers, invalid settings). It also runs after every import and settings change. A banner shows integrity problems on load.
+- **Settings:** stricter validation (dorm capacity, fees, deadlines, course codes); changing the column mapping is refused once applications exist; removing a course/session in use is refused; "changed elsewhere" warning on Season setup; sessions have a *Choice columns* setting instead of relying on order.
+- **Admission batch** (downloaded but not yet confirmed) is stored in the Sheet's settings, so it survives closing the tab and is confirmed with the date/deadline that were in the e-mails.
+- **Payments:** matching on a unique *student* name only is never bulk-approved; a unique *parent* name is only a suggestion to confirm. Approving a proof whose amount wasn't found asks for the amount paid. The same proof file (SHA-256 hash) used for two payments is flagged.
+- **Proof check:** IBANs are validated (country length + checksum), labelled payer/beneficiary from the text around them; a proof paying a *different* beneficiary IBAN is flagged "ATTENTION". The reimbursement IBAN taken from a proof is a guess until confirmed on *Unenrolled after paid* (the other IBANs on the proof are offered as choices).
+- **Motivation packet:** redaction also covers address, birth date, generic e-mails/URLs/handles/phone numbers and name prefixes. Before download, every statement is shown with capitalised words and numbers highlighted; a checkbox confirms they were looked through. The FL-school packet shows the school list before download. Both instructions tell the LLM to treat the content as data.
+- **New season:** the new Sheet records the previous season's Sheet ID; a failed archive step can be retried without creating a second Sheet.
+- **Exports:** mailing-list CSV cells that start with `= + - @` get a leading `'` (no formula injection).
+- **OCR:** clear messages for iPhone HEIC photos and password-protected or damaged PDFs.
+- **Content-Security-Policy** in the built app: scripts only from the app and Google sign-in, network only to Google sign-in and Sheets.
+
 ## 9. Still to be done / decided
 
 *Parked items, collected here so nothing gets lost. Move an item into the relevant section once it is decided.*
@@ -179,7 +203,7 @@ Automate the Summer of Science application workflow (intake → checks → cours
 ### Questions for Daniel's next review
 1. Closing a young-student flag warns about "Student dorm OK" only for FULL students (EVENING/DAY don't sleep in the dorms). OK?
 2. Proof "likely OK" = amount + (reference OR IBAN). Or require all three (one-line change)?
-3. Payments are linked automatically by e-mail and by a *unique* exact student/parent name. Should name-only matches always be confirmed by hand?
+3. ~~Name-only payment matches~~ — decided in the review fixes: student-name-only matches are never bulk-approved, parent-name-only matches are suggestions to confirm.
 4. Student-card PDF: is the page layout right (compare with a 2025 card)?
 5. Session e-mail list (`email name` per line, parents as "Name (parent of Student)"): does the mailing-list server accept this format?
 6. Dashboard "Max" per course: show the current limit (now) or the soft max?
@@ -190,6 +214,9 @@ Automate the Summer of Science application workflow (intake → checks → cours
   - (a) *Google Picker* (recommended): the colleague picks the Sheet once in Google's file chooser; keeps the narrow permission. Needs the Picker API enabled and a browser API key restricted to `drmayerson.github.io` (~5 min setup).
   - (b) *Broader `spreadsheets` scope*: no picker, but the app gets access to all of the colleague's Sheets.
   - Either way: every colleague must be added as a test user (Google Cloud → Audience) while the app stays in testing mode (max. 100 users). The "Copy app link to this Sheet" link already exists for handing out the Sheet.
+- **Hosting** (review H1, parked by Daniel 11 Nov 2026): the app stays on public GitHub Pages for now. Later options: a KU Leuven-hosted page or a private repo with Pages on a paid plan; a Google Workspace-managed OAuth app instead of testing mode.
+- **LLM account** (review Q9): which claude.ai account (personal or KU Leuven-licensed) receives the packets, and whether the DPO agrees — to settle before using the LLM steps with real data.
+- **Google testing mode:** sign-in consent for an app in testing mode expires after ~7 days; then the user simply signs in again.
 - **Data protection:** DPO review before going live with real data, and the retention period for archived seasons (§2).
 - **Google account** that owns the master Sheet long-term: Daniel's own or a KU Leuven-linked account (§2).
 - **Proof files from Outlook** into one folder (Power Automate flow, `REMINDERS.md` item 3), each saved as `<payer e-mail>__<original name>` (the e-mail as given in the form, from the notification e-mail's body). A date/time prefix alone makes names unique but doesn't tie a file to its payment row.

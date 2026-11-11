@@ -7,6 +7,7 @@ import { fieldOptions } from '../../core/fieldOptions';
 import { fold } from '../../core/text';
 import { APP_COLS, FLAG_COLS, PAY_COLS, type FieldKey, type Row } from '../../core/types';
 import { choicesText, fmtTime, fullName, useApp } from '../ctx';
+import { reinstateOutcome } from '../../core/unenroll';
 import { UnenrollButton } from '../Unenroll';
 import { AuditTable } from './Audit';
 
@@ -314,6 +315,12 @@ function EditView({ id }: { id: string }) {
               {['claimed', 'confirmed', 'rejected', 'n.a.'].map((s) => <option>{s}</option>)}
             </select>
           </label>
+          <label>Accommodation in force (now: {effectiveAccommodation(app, cfg) || '?'})
+            <select value={val(APP_COLS.accommodationFinal)} onChange={(e) => setVal(APP_COLS.accommodationFinal, (e.target as HTMLSelectElement).value)}>
+              <option value="">as on the form ({field(app, cfg, 'accommodation') || '?'})</option>
+              {['FULL', 'EVENING', 'DAY'].map((s) => <option value={s}>{s} (decided)</option>)}
+            </select>
+          </label>
           <label>Course decisions (set on <a href="#/young">Young students</a>)
             <span class="plain">OK: {app[APP_COLS.okForCourses] || '—'} · NOT OK: {app[APP_COLS.notOkForCourses] || '—'}</span>
           </label>
@@ -347,7 +354,17 @@ function EditView({ id }: { id: string }) {
         <button class="primary" disabled={changed.length === 0} onClick={save}>Save {changed.length || ''} change(s)</button>
         {changed.length > 0 && <button onClick={() => setDraft({})}>Discard</button>}
         <span class="spacer" />
-        {app[APP_COLS.status] === 'withdrawn' && <button onClick={() => run(() => repo.reinstate(id), `${id} reinstated.`)}>Reinstate</button>}
+        {app[APP_COLS.status] === 'withdrawn' && (
+          <button
+            onClick={() => {
+              const o = reinstateOutcome(app, snap.apps, cfg);
+              if (!confirm(`Reinstate ${id} ${fullName(app, cfg)}?\n\n${o.text}`)) return;
+              run(() => repo.reinstate(id), `${id} reinstated. ${o.text}`);
+            }}
+          >
+            Reinstate…
+          </button>
+        )}
       </div>
 
       <h2>Flags</h2>

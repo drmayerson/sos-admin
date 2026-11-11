@@ -1,3 +1,4 @@
+import { brusselsDate } from '../../core/dates';
 import { useState } from 'preact/hooks';
 import { addDays, ADMISSION_COLUMNS, admissionExport, type AdmissionExport } from '../../core/admission';
 import { APP_COLS } from '../../core/types';
@@ -14,14 +15,22 @@ async function downloadXlsx(ex: AdmissionExport, filename: string) {
 
 export function Admissions() {
   const { snap, repo, run } = useApp();
-  const today = new Date().toISOString().slice(0, 10);
-  const [batch, setBatch] = useState<AdmissionExport | null>(null);
+  const today = brusselsDate();
   const [deadline, setDeadline] = useState('');
   if (!snap.cfg) return <p class="warn">Set up the season first.</p>;
   const cfg = snap.cfg;
   const dl = deadline || addDays(today, cfg.paymentDeadlineDays);
   const ex = admissionExport(snap.apps, cfg, today, dl);
   const admitted = snap.apps.filter((a) => a[APP_COLS.admittedAt]);
+  // A downloaded batch is kept in the season settings until confirmed or cancelled (survives closing the tab), with
+  // the date and deadline that were in the e-mails.
+  const pending = cfg.pendingAdmission;
+  const batch: AdmissionExport | null = pending
+    ? (() => {
+        const all = admissionExport(snap.apps.map((a) => (pending.ids.includes(a[APP_COLS.id]) ? { ...a, [APP_COLS.admittedAt]: '' } : a)), cfg, pending.date, pending.deadline);
+        return { ...all, rows: all.rows.filter((r) => pending.ids.includes(r.ID)) };
+      })()
+    : null;
 
   return (
     <div>
@@ -72,7 +81,7 @@ export function Admissions() {
                 class="primary"
                 onClick={async () => {
                   await downloadXlsx(ex, `SOS-admissions-${today}.xlsx`);
-                  setBatch(ex);
+                  await run(() => repo.setPendingAdmission({ ids: ex.rows.map((r) => r.ID), deadline: ex.paymentDeadline, date: today }));
                 }}
               >
                 Download mail-merge Excel ({ex.rows.length})
@@ -84,24 +93,22 @@ export function Admissions() {
         <div class="panel">
           <h2>Sent?</h2>
           <p>
-            You downloaded the file for <b>{batch.rows.length}</b> student(s) ({batch.rows.map((r) => r.ID).join(', ')}). After sending
-            the e-mails, confirm here: they're marked admitted today with payment deadline <b>{batch.paymentDeadline}</b>.
+            On {pending!.date} you downloaded the file for <b>{batch.rows.length}</b> student(s) ({batch.rows.map((r) => r.ID).join(', ')}).
+            After sending the e-mails, confirm here: they're marked admitted on <b>{pending!.date}</b> with the payment deadline from the
+            e-mails, <b>{batch.paymentDeadline}</b>.
           </p>
           <div class="row">
             <button
               class="primary"
               onClick={() =>
-                confirm(`Mark these ${batch.rows.length} student(s) as admitted today, with payment deadline ${batch.paymentDeadline}?`) &&
-                run(async () => {
-                  await repo.markAdmitted(batch.rows.map((r) => r.ID), today, batch.paymentDeadline);
-                  setBatch(null);
-                }, `${batch.rows.length} student(s) marked admitted.`)
+                confirm(`Mark these ${batch.rows.length} student(s) as admitted on ${pending!.date}, with payment deadline ${batch.paymentDeadline}?`) &&
+                run(() => repo.markAdmitted(batch.rows.map((r) => r.ID), pending!.date, batch.paymentDeadline), `${batch.rows.length} student(s) marked admitted.`)
               }
             >
               I've sent these e-mails — mark {batch.rows.length} admitted
             </button>
-            <button onClick={() => setBatch(null)}>Not sent — cancel</button>
-            <button class="link" onClick={() => downloadXlsx(batch, `SOS-admissions-${today}.xlsx`)}>Download again</button>
+            <button onClick={() => confirm('Forget this batch (the e-mails were NOT sent)?') && run(() => repo.setPendingAdmission(null), 'Batch cancelled.')}>Not sent — cancel</button>
+            <button class="link" onClick={() => downloadXlsx(batch, `SOS-admissions-${pending!.date}.xlsx`)}>Download again</button>
           </div>
         </div>
       )}

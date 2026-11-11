@@ -44,8 +44,9 @@ describe('redaction before anything goes to an LLM', () => {
     for (const it of p.items) {
       const a = apps.find((x) => x[APP_COLS.id] === it.id)!;
       const txt = fold(it.motivation);
-      for (const w of `${field(a, c, 'firstName')} ${field(a, c, 'surname')}`.split(/[\s-]+/).filter((x) => x.length >= 3))
-        expect(txt, `${it.id} contains "${w}"`).not.toMatch(new RegExp(`(?<![a-z])${fold(w).replace(/[.*+?^${}()|[\]\\']/g, '\\$&')}(?![a-z])`));
+      // Every name part of 4+ letters is gone (particles like "van"/"den" are deliberately kept: they're common words).
+      for (const w of `${field(a, c, 'firstName')} ${field(a, c, 'surname')}`.split(/[\s-]+/).filter((x) => x.length >= 4))
+        expect(txt, `${it.id} contains "${w}"`).not.toMatch(new RegExp(`(?<![a-z])${fold(w).replace(/[.*+?^${}()|[\]\\']/g, '\\$&')}`));
       expect(txt).not.toContain(fold(field(a, c, 'email')));
     }
     expect(JSON.stringify(p)).not.toMatch(/@example\./);
@@ -99,7 +100,7 @@ describe('motivation check answers', () => {
       isMotivationAnswer,
     );
     const r = await repo.importMotivationAnswers(ans);
-    expect(r).toEqual({ flagged: 1, unknown: ['SOS26-9999'] });
+    expect(r).toEqual({ flagged: 1, unknown: ['SOS26-9999'], skipped: 0 });
     const s = await repo.snapshot();
     expect(s.apps.find((a) => a[APP_COLS.id] === idOf('E20'))![APP_COLS.motivationCheck]).toBe('no flag');
     expect(s.flags.find((f) => f[FLAG_COLS.appId] === idOf('E15') && f[FLAG_COLS.type] === 'MOTIVATION_LLM')![FLAG_COLS.detail]).toMatch(/university student/);

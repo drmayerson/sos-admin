@@ -1,3 +1,4 @@
+import { brusselsDate, brusselsEndOfDayUTC } from '../../core/dates';
 import { useState } from 'preact/hooks';
 import { isActive, isLocked, lockBlockers, priorityCompare } from '../../core/assign';
 import { countsAsFlemish } from '../../core/fees';
@@ -7,7 +8,7 @@ import { fmtTime, fullName, useApp } from '../ctx';
 
 export function Locking() {
   const { snap, repo, run } = useApp();
-  const [upTo, setUpTo] = useState(new Date().toISOString().slice(0, 10));
+  const [upTo, setUpTo] = useState(brusselsDate());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [skipped, setSkipped] = useState<{ id: string; why: string[] }[]>([]);
   const [unlockReason, setUnlockReason] = useState('');
@@ -16,24 +17,35 @@ export function Locking() {
   const active = snap.apps.filter(isActive).sort(priorityCompare);
   const unlocked = active.filter((a) => !isLocked(a) && a[APP_COLS.assignedCourse]);
   const locked = active.filter(isLocked);
-  const upToIso = `${upTo}T23:59:59.999999Z`;
+  // End of that day in Belgium (applications are posted in Belgian time).
+  const upToIso = brusselsEndOfDayUTC(upTo);
   const batch = (flOnly: boolean) => active.filter((a) => !isLocked(a) && a[APP_COLS.postingUTC] <= upToIso && (!flOnly || countsAsFlemish(a)));
 
-  const doLock = (ids: string[], label: string) =>
-    confirm(`Lock up to ${ids.length} student(s)? Locked students are never changed by re-runs (only by unlocking).`) &&
+  const doLock = (ids: string[], label: string) => {
+    const blocked = ids.filter((id) => {
+      const a = snap.apps.find((x) => x[APP_COLS.id] === id);
+      return a && lockBlockers(a, snap.flags).length > 0;
+    }).length;
+    return (
+      confirm(
+        `Lock ${ids.length - blocked} student(s)?${blocked ? ` (${blocked} more can't be locked yet — they'll be listed.)` : ''}\n\nLocked students are never changed by re-runs (only by unlocking).`,
+      ) &&
     run(async () => {
       const s = await repo.lock(ids);
       setSkipped(s);
       setSelected(new Set());
-    }, label);
+    }, label)
+    );
+  };
 
   return (
     <div>
       <h1>Locking</h1>
       <p>
         Lock a student once their assignment has been communicated: re-runs never change a locked student. Students can't be
-        locked while unassigned, waiting for a dorm place, with an open young-student flag, or while their Flemish-school claim
-        isn't confirmed or rejected yet (decide it here, or in bulk on the <a href="#/schools">LLM helper – FL schools</a> screen).
+        locked while unassigned, waiting for a dorm place, with <b>any open flag</b> (decide it on the <a href="#/flags">Flags</a>
+        screen first), or while their Flemish-school claim isn't confirmed or rejected yet (decide it here, or in bulk on the
+        <a href="#/schools"> LLM helper – FL schools</a> screen).
       </p>
 
       <div class="panel">
@@ -124,7 +136,13 @@ export function Locking() {
                 <button
                   disabled={!unlockReason.trim()}
                   title={unlockReason.trim() ? '' : 'Enter a reason first'}
-                  onClick={() => run(() => repo.unlock(a[APP_COLS.id], unlockReason.trim()), `${a[APP_COLS.id]} unlocked.`)}
+                  onClick={() => {
+                    const id = a[APP_COLS.id];
+                    const told = a[APP_COLS.admittedAt] ? `was admitted on ${a[APP_COLS.admittedAt]}` : `was locked on ${a[APP_COLS.lockedAt]}`;
+                    if (!confirm(`Unlock ${id} ${fullName(a, cfg)}? They ${told}: they may already have been told about ${a[APP_COLS.assignedCourse]}.`)) return;
+                    const keep = confirm(`Keep ${id} in ${a[APP_COLS.assignedCourse]} as a manual assignment (recommended — a re-run won't move them)?\n\nOK = keep in ${a[APP_COLS.assignedCourse]}, Cancel = let the next run decide.`);
+                    run(() => repo.unlock(id, unlockReason.trim(), keep), `${id} unlocked${keep ? ` (kept in ${a[APP_COLS.assignedCourse]})` : ''}.`);
+                  }}
                 >
                   Unlock
                 </button>

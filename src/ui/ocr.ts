@@ -33,7 +33,15 @@ async function pdfText(file: File): Promise<string> {
   const pdfjs = await import('pdfjs-dist');
   const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  let doc;
+  try {
+    doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  } catch (e) {
+    const name = e instanceof Error ? e.name : '';
+    if (name === 'PasswordException') throw new Error(`${file.name}: the PDF is password-protected — check this proof by hand.`);
+    if (name === 'InvalidPDFException') throw new Error(`${file.name}: not a valid PDF (damaged?) — check this proof by hand.`);
+    throw e;
+  }
   const pages = Math.min(doc.numPages, 3);
   let text = '';
   for (let i = 1; i <= pages; i++) {
@@ -57,8 +65,11 @@ async function pdfText(file: File): Promise<string> {
 }
 
 export async function extractText(file: File): Promise<{ text: string; how: string }> {
+  // iPhone photos: browsers can't decode HEIC, so text recognition would fail with an obscure error.
+  if (/^image\/hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name))
+    throw new Error(`${file.name}: iPhone HEIC photo — the browser can't read it. Open it, save as JPG/PNG (or check it by hand).`);
   if (file.type.startsWith('image/')) return { text: await ocrImage(file), how: 'text recognition' };
   if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) return { text: await pdfText(file), how: 'PDF' };
   if (/\.(png|jpe?g|gif|bmp|webp)$/i.test(file.name)) return { text: await ocrImage(file), how: 'text recognition' };
-  throw new Error(`${file.name}: not an image or PDF.`);
+  throw new Error(`${file.name}: not an image or PDF — check this proof by hand.`);
 }

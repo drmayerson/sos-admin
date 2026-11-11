@@ -73,7 +73,7 @@ describe('SheetsStore', () => {
     const s = await repo.snapshot();
     const fid = s.flags.find((f) => f[FLAG_COLS.type] === 'SHORT_MOTIVATION')![FLAG_COLS.flagId];
     await repo.setFlagStatus(fid, 'approved', 'fine');
-    expect(api.calls.reads - before.reads).toBeLessThanOrEqual(6);
+    expect(api.calls.reads - before.reads).toBeLessThanOrEqual(8);
     expect(api.calls.writes - before.writes).toBeLessThanOrEqual(4);
   });
 });

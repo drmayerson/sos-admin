@@ -60,6 +60,9 @@ export function nameScore(a: string, b: string): number {
 
 // ---------------------------------------------------------------- matching
 
+/** Match method of a payment linked on the student's name alone (no e-mail match): never bulk-approved. */
+export const NAME_ONLY = 'student name only';
+
 export interface MatchResult {
   status: 'matched' | 'open';
   apps: string[];
@@ -107,8 +110,12 @@ export function matchPayment(name: string, email: string, sessionAnswer: string,
   const ranked = top(pool);
   const exact = ranked.filter((r) => r.score >= 0.99);
   const people = new Set(exact.map((r) => personOf(r.id, pool)));
-  if (exact.length && people.size === 1 && exact.length === 1)
-    return { status: 'matched', apps: [exact[0].id], method: exact[0].who === 'parent' ? 'parent name' : 'student name', candidates: [] };
+  // A unique exact *student* name is linked automatically but marked "name only" (excluded from bulk approval);
+  // a parent name alone is too weak (common names): it becomes the first suggestion, one click away.
+  if (exact.length === 1 && people.size === 1 && exact[0].who === 'student')
+    return { status: 'matched', apps: [exact[0].id], method: NAME_ONLY, candidates: [] };
+  if (exact.length === 1 && exact[0].who === 'parent')
+    return { status: 'open', apps: [], method: 'parent name only — please confirm', candidates: ranked.filter((r) => r.score >= 0.5).slice(0, 3) };
   return { status: 'open', apps: [], method: exact.length > 1 ? `name matches ${exact.length} applications` : 'no match', candidates: ranked.filter((r) => r.score >= 0.5).slice(0, 3) };
 }
 

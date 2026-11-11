@@ -28,3 +28,9 @@ Pushing to `main` runs the tests and deploys to GitHub Pages (`.github/workflows
 - `src/store/` — demo store (in memory, synthetic data), Google sign-in (`googleAuth.ts`, holds the public OAuth client ID), Sheets API client and `SheetsStore`.
 - `src/ui/` — Preact screens; they only call `Repo` and core functions.
 - `tests/` — Vitest tests driven by `test-data/`.
+
+## Notes
+
+- The Google OAuth app is in *testing* mode: sign-in consent expires after about 7 days, after which the app simply asks you to sign in again. Every user must be listed as a test user (Google Cloud → Audience).
+- The built app carries a Content-Security-Policy (`vite.config.ts`): scripts only from the app itself and Google sign-in, network only to Google sign-in and the Sheets API. Add a host there if a new external service is ever needed.
+- The workflow's GitHub Actions are pinned to commit SHAs (tag in a comment); update both together.

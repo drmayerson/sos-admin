@@ -69,10 +69,21 @@ export class GoogleAuth {
     return this.email;
   }
 
-  /** A valid access token, renewed silently when (almost) expired. */
+  /** A valid access token, renewed when (almost) expired. Parallel callers share one renewal. */
   async getToken(): Promise<string> {
     if (this.token && Date.now() < this.expiresAt - 60_000) return this.token;
     return this.request('');
+  }
+
+  /**
+   * Make sure the token stays valid for at least `ms` more. Called at the start of every action that changes data,
+   * while still inside the click — the only moment a browser allows Google's pop-up — so a long action can't run
+   * into an expired token halfway.
+   */
+  async ensureValid(ms = 5 * 60_000): Promise<void> {
+    if (this.token && Date.now() < this.expiresAt - ms) return;
+    this.token = '';
+    await this.request('');
   }
 
   /** Force renewal (after a 401). */
@@ -87,7 +98,17 @@ export class GoogleAuth {
     this.email = '';
   }
 
-  private async request(prompt: string): Promise<string> {
+  private inFlight: Promise<string> | null = null;
+
+  /** One token request at a time: every caller waiting meanwhile gets the same result. */
+  private request(prompt: string): Promise<string> {
+    this.inFlight ??= this.doRequest(prompt).finally(() => {
+      this.inFlight = null;
+    });
+    return this.inFlight;
+  }
+
+  private async doRequest(prompt: string): Promise<string> {
     if (!this.configured) throw new Error('Google sign-in is not configured yet (no OAuth client ID).');
     await loadGis();
     if (!this.client) {
@@ -106,7 +127,15 @@ export class GoogleAuth {
         error_callback: (e) => {
           const p = this.pending;
           this.pending = null;
-          p?.reject(new Error(e.type === 'popup_closed' ? 'Sign-in window was closed.' : `Google sign-in failed (${e.type}).`));
+          p?.reject(
+            new Error(
+              e.type === 'popup_closed'
+                ? 'Sign-in window was closed.'
+                : e.type === 'popup_failed_to_open'
+                  ? 'Your Google session expired and the browser blocked the sign-in window. Click the button again (or allow pop-ups for this site) to continue.'
+                  : `Google sign-in failed (${e.type}).`,
+            ),
+          );
         },
       });
     }

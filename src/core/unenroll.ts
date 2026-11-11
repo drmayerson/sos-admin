@@ -72,3 +72,24 @@ export const totalToReimburse = (apps: Row[]) =>
   paidUnenrolled(apps)
     .filter((a) => a[APP_COLS.reimbursement] === 'eligible' && !a[APP_COLS.reimbursedAt])
     .reduce((s, a) => s + parseAmount(amountPaid(a)), 0);
+
+/**
+ * What reinstating a withdrawn student would do (Daniel, 11 Nov 2026): back into their previous course, with lock /
+ * admission / payment as they were, if that course still has a place (and, for FULL students, the dorm too);
+ * otherwise active but not assigned, with lock and admission cleared (payment history kept).
+ */
+export function reinstateOutcome(a: Row, apps: Row[], cfg: SeasonConfig): { restore: boolean; course: string; text: string } {
+  const course = a[APP_COLS.courseAtUnenrolment] ?? '';
+  const c = cfg.courses.find((x) => x.code === course);
+  const s = cfg.sessions.find((x) => x.key === a[APP_COLS.session]);
+  const others = apps.filter((x) => x[APP_COLS.id] !== a[APP_COLS.id] && (x[APP_COLS.status] || 'active') === 'active');
+  const inCourse = others.filter((x) => x[APP_COLS.assignedCourse] === course).length;
+  const courseFree = !!c && inCourse < Math.min(c.limit, c.hardMax);
+  const full = effectiveAccommodation(a, cfg) === 'FULL';
+  const dormUsed = others.filter((x) => x[APP_COLS.session] === a[APP_COLS.session] && x[APP_COLS.assignedCourse] && x[APP_COLS.dormWaiting] !== 'TRUE' && effectiveAccommodation(x, cfg) === 'FULL').length;
+  const dormFree = !full || (!!s && dormUsed < s.dormCapacity);
+  if (course && courseFree && dormFree)
+    return { restore: true, course, text: `Back in ${course}${full ? ' with a dorm place' : ''}; lock, admission and payment stay as they were.` };
+  const why = !course ? 'they had no course' : !courseFree ? `${course} is full now` : `the dorms of ${a[APP_COLS.session]} are full now`;
+  return { restore: false, course: '', text: `Not back in a course (${why}): active, not assigned; lock and admission cleared (payment history kept). The next assignment run places them like anyone else.` };
+}

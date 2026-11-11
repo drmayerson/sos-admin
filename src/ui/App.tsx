@@ -80,36 +80,77 @@ export function App() {
   );
 }
 
+/** True while a data-changing action runs (module-level so even two very fast clicks see it). */
+let inFlight = false;
+const IDLE_MS = 20 * 60_000;
+
 function Main({ repo, sheetId, onDisconnect }: { repo: Repo; sheetId: string; onDisconnect: () => void }) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [problems, setProblems] = useState<string[]>([]);
+  const [idle, setIdle] = useState(false);
   const route = useHashRoute();
   useEffect(() => setMsg(null), [route.join('/')]);
 
   const reload = async (fresh = false) => {
     if (fresh) repo.store.refresh?.();
     try {
-      setSnap(await repo.snapshot());
+      const s = await repo.snapshot();
+      setSnap(s);
+      setProblems(await repo.integrityProblems());
     } catch (e) {
       setMsg({ kind: 'err', text: e instanceof Error ? e.message : String(e) });
     }
   };
   useEffect(() => {
-    reload();
+    (async () => {
+      await reload();
+      // Raise flags for payment deadlines that passed since the last visit (idempotent).
+      try {
+        const cfg = await repo.loadConfig();
+        if (cfg && !cfg.archived && (await repo.checkPaymentDeadlines()) > 0) await reload();
+      } catch {
+        /* shown on the next action */
+      }
+    })();
     // Coming back to the tab (e.g. after editing the Sheet by hand): read fresh data.
-    const onFocus = () => !repo.store.isDemo && reload(true);
+    const onFocus = () => !repo.store.isDemo && !inFlight && reload(true);
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [repo]);
+
+  // Idle lock: hide the data after 20 minutes without input.
+  useEffect(() => {
+    let t = setTimeout(() => setIdle(true), IDLE_MS);
+    const poke = () => {
+      clearTimeout(t);
+      t = setTimeout(() => setIdle(true), IDLE_MS);
+    };
+    const evs = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'];
+    evs.forEach((e) => window.addEventListener(e, poke, { passive: true }));
+    return () => {
+      clearTimeout(t);
+      evs.forEach((e) => window.removeEventListener(e, poke));
+    };
+  }, []);
 
   if (!snap) return <p class="pad">{msg ? <span class="err-text">{msg.text}</span> : 'Loading…'}</p>;
 
   const ctx: Ctx = {
     repo,
     snap,
+    busy,
     reload: () => reload(),
+    // One action at a time: a second click while an action runs is ignored (prevents double imports etc.).
+    // Before the action: renew the Google token if needed (still inside the click) and read fresh data.
     run: async (what, done) => {
+      if (inFlight) return false;
+      inFlight = true;
+      setBusy(true);
       try {
+        await repo.store.prepare?.();
+        repo.store.refresh?.();
         await what();
         await reload();
         setMsg(done ? { kind: 'ok', text: done } : null);
@@ -118,6 +159,9 @@ function Main({ repo, sheetId, onDisconnect }: { repo: Repo; sheetId: string; on
         await reload(true);
         setMsg({ kind: 'err', text: e instanceof Error ? e.message : String(e) });
         return false;
+      } finally {
+        inFlight = false;
+        setBusy(false);
       }
     },
   };
@@ -156,6 +200,19 @@ function Main({ repo, sheetId, onDisconnect }: { repo: Repo; sheetId: string; on
     <AppCtx.Provider value={ctx}>
       {repo.store.isDemo && <div class="demo-banner">DEMO — synthetic data only, kept in this tab's memory (lost on reload)</div>}
       {snap.cfg?.archived && <div class="demo-banner archived">ARCHIVED SEASON {snap.cfg.season} — read-only</div>}
+      {busy && <div class="busy-overlay"><div class="busy-box">Working… please wait</div></div>}
+      {idle && (
+        <div class="idle-overlay" onClick={() => setIdle(false)}>
+          <div class="busy-box">Hidden after 20 minutes without activity. Click to continue.</div>
+        </div>
+      )}
+      {problems.length > 0 && (
+        <div class="problem-banner">
+          <b>The data needs attention before you continue:</b>
+          <ul>{problems.map((p) => <li>{p}</li>)}</ul>
+          <span class="small">After fixing the Sheet, use "Reload from Sheet", then "Check and repair" in Season setup.</span>
+        </div>
+      )}
       <div class="layout">
         <nav>
           <div class="brand">SOS admin</div>

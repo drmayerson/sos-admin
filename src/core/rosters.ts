@@ -51,7 +51,9 @@ export function courseCards(apps: Row[], cfg: SeasonConfig, course: string, who:
     }));
 }
 
-function csvCell(v: string): string {
+/** One CSV cell. A value starting with = + - @ gets a leading ' so a spreadsheet won't run it as a formula. */
+export function csvCell(v: string): string {
+  if (/^[=+\-@\t\r]/.test(v)) v = `'${v}`;
   return /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
 

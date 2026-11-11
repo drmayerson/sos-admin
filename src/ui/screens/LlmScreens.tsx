@@ -1,17 +1,19 @@
+import { brusselsDate } from '../../core/dates';
 import { useEffect, useState } from 'preact/hooks';
 import { isActive } from '../../core/assign';
 import { describePrereq } from '../../core/config';
 import { ageOn } from '../../core/dates';
 import { field } from '../../core/flags';
 import {
-  isMotivationAnswer, isPrereqAnswer, isSchoolAnswer, motivationPacket, parseAnswer, prereqFromAnswer, prereqPacket, schoolPacket, type PrereqAnswer,
+  isMotivationAnswer, isPrereqAnswer, isSchoolAnswer, motivationPacket, parseAnswer, prereqFromAnswer, prereqPacket, reviewHints, schoolPacket,
+  type MotivationPacket, type PrereqAnswer,
 } from '../../core/llm';
 import { collapseWs, fold } from '../../core/text';
 import { APP_COLS, FLAG_COLS, type Row } from '../../core/types';
 import { useApp } from '../ctx';
 import { downloadJson } from '../files';
 
-const stamp = () => new Date().toISOString().slice(0, 10);
+const stamp = () => brusselsDate();
 
 /** Paste Claude's answer, or load it from a file. */
 function AnswerBox({ onAnswer, label }: { onAnswer: (text: string) => Promise<unknown>; label: string }) {
@@ -30,7 +32,10 @@ function AnswerBox({ onAnswer, label }: { onAnswer: (text: string) => Promise<un
 
 const HOWTO = (
   <ol class="small">
-    <li>Download the packet (a small JSON file; it contains no names or contact details — you can open it to check).</li>
+    <li>
+      Look through what will be sent (shown before the download), then download the packet (a small JSON file you can open to
+      check).
+    </li>
     <li>Drag it into a claude.ai chat and ask Claude to follow the instructions inside. Claude answers with a copyable code block.</li>
     <li>Paste that code block below (or load it as a file). Nothing is decided automatically: you confirm.</li>
   </ol>
@@ -78,6 +83,13 @@ export function Schools() {
       <div class="panel">
         <h2>1. Ask Claude ({packet.schools.length} school name(s) without a verdict)</h2>
         {HOWTO}
+        {packet.schools.length > 0 && (
+          <details>
+            <summary>What Claude will see: {packet.schools.length} school name(s), nothing else</summary>
+            <div class="review-list">{packet.schools.map((s) => <div class="review-item">{s}</div>)}</div>
+            <p class="small muted">A school field that holds something else (a name, an address) should be fixed on the student's page first.</p>
+          </details>
+        )}
         <button disabled={packet.schools.length === 0} onClick={() => downloadJson(packet, `sos-fl-schools-packet-${stamp()}.json`)}>Download packet</button>
         <AnswerBox
           label="Import Claude's school verdicts"
@@ -147,10 +159,23 @@ export function Schools() {
 
 // ---------------------------------------------------------------- LLM helper – motivation check
 
+/** The text with review hints (capitalised words, numbers) marked. */
+function Highlighted({ text }: { text: string }) {
+  const parts: preact.ComponentChildren[] = [];
+  let at = 0;
+  for (const [s, e] of reviewHints(text)) {
+    if (s > at) parts.push(text.slice(at, s));
+    parts.push(<mark class="hint">{text.slice(s, e)}</mark>);
+    at = e;
+  }
+  parts.push(text.slice(at));
+  return <>{parts}</>;
+}
+
 export function MotivationCheck() {
   const { snap, repo, run } = useApp();
-  const [showSample, setShowSample] = useState(false);
-  const [sample, setSample] = useState('');
+  const [packet, setPacket] = useState<MotivationPacket | null>(null);
+  const [reviewed, setReviewed] = useState(false);
   if (!snap.cfg) return <p class="warn">Set up the season first.</p>;
   const cfg = snap.cfg;
   const ageOnStart = (a: Row) => {
@@ -170,26 +195,39 @@ export function MotivationCheck() {
         <p>
           Claude flags motivations that are very short without reason, suggest the student isn't a viable candidate (e.g. a
           university student), or are otherwise questionable. The packet holds only the anonymous ID, session, years left, age
-          and the motivation, with the student's and parent's names, e-mail addresses, phone numbers and the school replaced by
-          placeholders. Flags appear on the <a href="#/flags">Flags</a> screen ({flagged} open). For a long list, Claude will ask
-          whether you want its answer as a file or as a code block.
+          and the motivation. In the motivation, the student's and parents' names, e-mail addresses, phone numbers, address,
+          birth date and school are replaced by placeholders, as are any e-mail addresses, web links, social-media handles and
+          phone numbers. <b>Other names</b> (a sibling, a teacher, another school or town) <b>can't be recognised automatically</b>:
+          that's why you look through the statements before downloading. Flags appear on the <a href="#/flags">Flags</a> screen
+          ({flagged} open).
         </p>
         {HOWTO}
-        <div class="row">
-          <button disabled={todo.length === 0} onClick={() => downloadJson(motivationPacket(snap.apps, cfg, ageOnStart), `sos-motivation-packet-${stamp()}.json`)}>Download packet</button>
-          {todo.length > 0 && (
-            <button
-              class="link"
-              onClick={() => {
-                setShowSample(!showSample);
-                setSample(JSON.stringify(motivationPacket(todo.slice(0, 1), cfg, ageOnStart).items[0], null, 2));
-              }}
-            >
-              {showSample ? 'hide' : 'show'} what Claude will see (first statement)
-            </button>
-          )}
-        </div>
-        {showSample && sample && <pre class="sample">{sample}</pre>}
+        {!packet ? (
+          <button disabled={todo.length === 0} onClick={() => { setPacket(motivationPacket(snap.apps, cfg, ageOnStart)); setReviewed(false); }}>
+            Prepare packet ({todo.length} statement(s))
+          </button>
+        ) : (
+          <div>
+            <p class="small">
+              What Claude will see. <mark class="hint">Highlighted</mark>: capitalised words in mid-sentence and numbers — check
+              these for names or other details that should not be sent. To remove something, edit that student's motivation
+              (Applications → student → Edit) and prepare the packet again.
+            </p>
+            <div class="review-list">
+              {packet.items.map((it) => (
+                <div class="review-item">
+                  <b>{it.id}</b> <span class="muted small">({it.session}, {it.yearsLeft}, age {it.ageOnStart ?? '?'})</span>
+                  <div><Highlighted text={it.motivation} /></div>
+                </div>
+              ))}
+            </div>
+            <div class="row">
+              <label><input type="checkbox" checked={reviewed} onChange={() => setReviewed(!reviewed)} /> I looked through these {packet.items.length} statement(s)</label>
+              <button class="primary" disabled={!reviewed} onClick={() => downloadJson(packet, `sos-motivation-packet-${stamp()}.json`)}>Download packet</button>
+              <button class="link" onClick={() => setPacket(null)}>close</button>
+            </div>
+          </div>
+        )}
         <AnswerBox
           label="Import Claude's motivation verdicts"
           onAnswer={(t) =>

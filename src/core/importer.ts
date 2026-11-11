@@ -164,13 +164,18 @@ export function planImport({ csv, cfg, existingApps, existingRaw, importedAt }: 
     plan.errors.push(`Column for "${f}" has a different header ("${h}"). Confirm the mapping in Season setup first.`);
   if (mc.unknown.length) plan.warnings.push(`Unknown columns (kept in RawImports only): ${mc.unknown.join(' | ')}`);
 
-  // 2. Excel re-save detection on birth dates.
+  // 2. Excel re-save detection. The website export always writes birth dates as yyyy-mm-dd; any other format in more
+  //    than a few rows (dd/mm/yyyy, dd-mm-yyyy, dd.mm.yyyy, …) means the file went through a spreadsheet program.
   const bdHeader = cfg.columnMap.birthDate;
-  const excelDates = csv.rows.filter((r) => /^\d{1,2}\/\d{1,2}\/\d{4}$/.test((r.values[bdHeader] ?? '').trim())).length;
-  if (excelDates > 0)
+  const filled = csv.rows.map((r) => (r.values[bdHeader] ?? '').trim()).filter(Boolean);
+  const notIso = filled.filter((v) => !/^\d{4}-\d{2}-\d{2}$/.test(v));
+  if (notIso.length > Math.max(2, filled.length * 0.03))
     plan.errors.push(
-      `${excelDates} birth date(s) look like dd/mm/yyyy instead of yyyy-mm-dd: the file was probably re-saved in Excel. Please upload the original download.`,
+      `${notIso.length} birth date(s) are not written as yyyy-mm-dd (e.g. "${notIso[0]}"): the file was probably opened and saved in Excel. Please upload the original download.`,
     );
+  const phones = csv.rows.map((r) => (r.values[cfg.columnMap.phone] ?? '').trim()).filter(Boolean);
+  if (phones.length >= 10 && !phones.some((p) => /^[+0]/.test(p)))
+    plan.warnings.push('No phone number starts with "+" or "0": a spreadsheet program may have turned them into numbers. Check that this is the original download.');
   if (plan.errors.length) return plan;
 
   // 3. Rows already imported (by import key) are skipped silently.
@@ -219,7 +224,10 @@ export function planImport({ csv, cfg, existingApps, existingRaw, importedAt }: 
     const name = `${field(c.values, cfg, 'firstName')} ${field(c.values, cfg, 'surname')}`.replace(/\s+/g, ' ').trim();
 
     const dupOf = contentToId.get(ck);
-    if (dupOf) {
+    const dupStatus = dupOf ? people.find((p) => p[APP_COLS.id] === dupOf)?.[APP_COLS.status] ?? 'active' : '';
+    // An identical form from a student whose earlier application was withdrawn (or merged away) is a new
+    // application, not a duplicate to ignore (Daniel, 11 Nov 2026).
+    if (dupOf && (dupStatus === 'active' || dupStatus === '')) {
       plan.exactDuplicates.push({ rowNo: c.rowNo, name, posting: field(c.values, cfg, 'posting'), duplicateOf: dupOf });
       plan.rawRows.push({ ...c.values, ...meta, DuplicateOf: dupOf });
       continue;
@@ -240,8 +248,16 @@ export function planImport({ csv, cfg, existingApps, existingRaw, importedAt }: 
     // Near-duplicate: same person AND same session (different sessions = two legitimate applications).
     // With 3+ submissions, every later one points at the EARLIEST application of the group, so the
     // group can be reviewed and merged together.
+    // A withdrawn earlier application of the same student doesn't hold a place: flag a re-application instead.
+    const withdrawn = samePerson.filter((p) => p[APP_COLS.status] === 'withdrawn' && p[APP_COLS.session] === app[APP_COLS.session]);
+    if (withdrawn.length)
+      plan.flags.push({
+        appId: id,
+        type: 'REAPPLICATION',
+        detail: `Re-application after withdrawal of ${withdrawn.map((p) => p[APP_COLS.id]).join(', ')}${dupOf ? ' (identical form)' : ''}. Decide whether to accept it.`,
+      });
     const near = samePerson
-      .filter((p) => p[APP_COLS.status] !== 'merged' && p[APP_COLS.session] === app[APP_COLS.session])
+      .filter((p) => (p[APP_COLS.status] || 'active') === 'active' && p[APP_COLS.session] === app[APP_COLS.session])
       .sort((a, b) => (a[APP_COLS.postingUTC] < b[APP_COLS.postingUTC] ? -1 : 1))[0];
     if (near) {
       const how = myKeys.find((k) => k.startsWith('e:') && personMatchKeys(near, cfg).includes(k)) ? 'same e-mail' : 'same name + birth date';

@@ -36,3 +36,32 @@ export function ageOn(birth: string, on: string): number | null {
 export function nowIso(): string {
   return new Date().toISOString();
 }
+
+// ---------------------------------------------------------------- Belgian calendar dates
+// "Today", deadlines and cut-offs are calendar dates in Belgium, not UTC (between 00:00 and 02:00 local time
+// the UTC date is still yesterday).
+
+const BXL = 'Europe/Brussels';
+
+/** yyyy-mm-dd in Brussels for an ISO instant (default: now). */
+export function brusselsDate(iso?: string): string {
+  const d = iso ? new Date(iso) : new Date();
+  const p = new Intl.DateTimeFormat('en-CA', { timeZone: BXL, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d);
+  const get = (t: string) => p.find((x) => x.type === t)!.value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+/** Offset of Brussels from UTC in minutes at a given instant (+60 in winter, +120 in summer). */
+function brusselsOffsetMin(ms: number): number {
+  const p = new Intl.DateTimeFormat('en-US', { timeZone: BXL, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(ms));
+  const g = (t: string) => Number(p.find((x) => x.type === t)!.value);
+  return (Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute'), g('second')) - ms) / 60_000;
+}
+
+/** The last microsecond of a Brussels calendar day, as a PostingUTC-comparable string ("…T21:59:59.999999Z"). */
+export function brusselsEndOfDayUTC(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const localEnd = Date.UTC(y, m - 1, d, 23, 59, 59);
+  const ms = localEnd - brusselsOffsetMin(localEnd) * 60_000;
+  return `${new Date(ms).toISOString().slice(0, 19)}.999999Z`;
+}

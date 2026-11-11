@@ -1,3 +1,4 @@
+import { brusselsDate } from '../../core/dates';
 import { awaitingPayment, isOverdue } from '../../core/deadlines';
 import { APP_COLS, FLAG_COLS } from '../../core/types';
 import { useApp } from '../ctx';
@@ -8,7 +9,7 @@ export function Home() {
   const open = snap.flags.filter((f) => f[FLAG_COLS.status] === 'open');
   const openOf = (t: string) => open.filter((f) => f[FLAG_COLS.type] === t).length;
   const bySession = (k: string) => active.filter((a) => a[APP_COLS.session] === k).length;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = brusselsDate();
 
   return (
     <div>

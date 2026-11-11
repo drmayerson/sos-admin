@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { decodeUtf8, parseCsv } from '../src/core/csv';
 import { deadlineFlags, isOverdue } from '../src/core/deadlines';
-import { idList, nameScore, planPayments } from '../src/core/payments';
+import { idList, NAME_ONLY, nameScore, planPayments } from '../src/core/payments';
 import { amountsIn, analyzeProof } from '../src/core/proof';
 import { Repo } from '../src/core/repo';
 import { MemoryTableStore } from '../src/core/store';
@@ -40,17 +40,27 @@ describe('payment matching vs oracle (expected_payments.json)', async () => {
     expect(wrong).toEqual([]);
   });
 
-  it('matches name-only payments when the name is unique; a shared name (siblings, unmerged resubmission) goes to a human', () => {
-    const byName = expPay().filter((e) => typeof e.matchesId === 'string' && /^name_exact|no accents|reversed|parent_name/.test(e.method));
+  it('a unique student name is linked ("name only"); a shared name goes to a human', () => {
+    const byName = expPay().filter((e) => typeof e.matchesId === 'string' && /^name_exact|no accents|reversed/.test(e.method));
     for (const e of byName) {
       const r = row(e.row);
-      if (r[PAY_COLS.status] === 'matched') expect(r[PAY_COLS.matchedApps], `row ${e.row}`).toBe(e.matchesId);
-      else {
+      if (r[PAY_COLS.status] === 'matched') {
+        expect(r[PAY_COLS.matchedApps], `row ${e.row}`).toBe(e.matchesId);
+        expect(r[PAY_COLS.matchMethod]).toBe(NAME_ONLY); // never part of "approve all likely OK"
+      } else {
         expect(r[PAY_COLS.matchMethod], `row ${e.row}`).toMatch(/name matches \d+ applications/);
         expect(r[PAY_COLS.candidates]).toContain(e.matchesId as string);
       }
     }
     expect(byName.filter((e) => row(e.row)[PAY_COLS.status] === 'matched').length).toBeGreaterThanOrEqual(byName.length - 2);
+  });
+
+  it('P07: a parent name alone is never linked automatically, but is the first suggestion', () => {
+    for (const e of expPay().filter((x) => x.method === 'parent_name')) {
+      const r = row(e.row);
+      expect(r[PAY_COLS.status], `row ${e.row}`).toBe('open');
+      expect(r[PAY_COLS.candidates], `row ${e.row}`).toContain(e.matchesId as string);
+    }
   });
 
   it('P08: a surname typo is not auto-matched, but the right student is among the top-3 suggestions', () => {
