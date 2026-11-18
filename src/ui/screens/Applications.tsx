@@ -5,7 +5,7 @@ import { field } from '../../core/flags';
 import { effectiveAccommodation, feeColumns } from '../../core/fees';
 import { fieldOptions } from '../../core/fieldOptions';
 import { fold } from '../../core/text';
-import { APP_COLS, FLAG_COLS, PAY_COLS, type FieldKey, type Row } from '../../core/types';
+import { APP_COLS, FLAG_COLS, PAY_COLS, type FieldKey, type Row, type SeasonConfig } from '../../core/types';
 import { choicesText, fmtTime, fullName, useApp } from '../ctx';
 import { reinstateOutcome } from '../../core/unenroll';
 import { UnenrollButton } from '../Unenroll';
@@ -25,9 +25,7 @@ export function Applications() {
     if (status && a[APP_COLS.status] !== status) return false;
     if (session && a[APP_COLS.session] !== session) return false;
     if (stage && !stageOf(a).startsWith(stage)) return false;
-    if (!needle) return true;
-    const hay = fold([a[APP_COLS.id], fullName(a, cfg), field(a, cfg, 'email'), field(a, cfg, 'parentEmail'), field(a, cfg, 'parentName'), field(a, cfg, 'school')].join(' '));
-    return hay.includes(needle);
+    return !needle || matches(a, cfg, needle);
   });
   // Previous/next in the detail view follow this list (with its filters).
   navList = rows.map((a) => a[APP_COLS.id]);
@@ -83,6 +81,50 @@ const GROUPS: [string, FieldKey[]][] = [
 const SENSITIVE: FieldKey[] = ['food', 'medical'];
 const LONG: FieldKey[] = ['motivation', 'address', 'specialRequests', 'remarks', 'previous', 'food', 'medical'];
 
+/** Search text (folded) found in ID, name, e-mails, parent or school. */
+function matches(a: Row, cfg: SeasonConfig, needle: string): boolean {
+  const hay = fold([a[APP_COLS.id], fullName(a, cfg), field(a, cfg, 'email'), field(a, cfg, 'parentEmail'), field(a, cfg, 'parentName'), field(a, cfg, 'school')].join(' '));
+  return hay.includes(needle);
+}
+
+/** Search box in the student view: type part of a name, ID or e-mail, pick a student (Enter = first match). */
+function StudentSearch() {
+  const { snap } = useApp();
+  const [q, setQ] = useState('');
+  const cfg = snap.cfg!;
+  const needle = fold(q.trim());
+  const hits = needle ? snap.apps.filter((a) => matches(a, cfg, needle)).slice(0, 10) : [];
+  const go = (id: string) => {
+    setQ('');
+    location.hash = `#/apps/${id}`;
+  };
+  return (
+    <div class="search-pop">
+      <input
+        type="search"
+        placeholder="Find student: name, ID, e-mail…"
+        value={q}
+        onInput={(e) => setQ((e.target as HTMLInputElement).value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && hits[0]) go(hits[0][APP_COLS.id]);
+          if (e.key === 'Escape') setQ('');
+        }}
+      />
+      {needle && (
+        <div class="search-results">
+          {hits.length === 0 && <div class="muted small">no match</div>}
+          {hits.map((a) => (
+            <button class="link" onClick={() => go(a[APP_COLS.id])}>
+              <b>{a[APP_COLS.id]}</b> {fullName(a, cfg)}{' '}
+              <span class="muted small">{a[APP_COLS.session]} {a[APP_COLS.status] !== 'active' ? `(${a[APP_COLS.status]})` : ''}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** IDs of the last shown Applications list (for previous/next), and the chosen detail mode. */
 let navList: string[] = [];
 let detailMode: 'full' | 'edit' = 'full';
@@ -113,6 +155,7 @@ export function ApplicationDetail({ id }: { id: string }) {
     <div>
       <div class="row detail-nav">
         <a href="#/apps">← Applications</a>
+        <StudentSearch />
         <span class="spacer" />
         <button disabled={!prev} onClick={() => (location.hash = `#/apps/${prev}`)}>‹ Previous</button>
         <span class="muted small">{i >= 0 ? `${i + 1} of ${list.length}` : ''} (or ← → keys)</span>
@@ -312,7 +355,10 @@ function EditView({ id }: { id: string }) {
         <div class="fields">
           <label>Flemish status (FL)
             <select value={val(APP_COLS.flStatus)} onChange={(e) => setVal(APP_COLS.flStatus, (e.target as HTMLSelectElement).value)}>
-              {['claimed', 'confirmed', 'rejected', 'n.a.'].map((s) => <option>{s}</option>)}
+              {[
+                ['claimed', 'claimed (to check)'], ['confirmed', 'confirmed (Flemish school)'],
+                ['exception', 'exception (school not Flemish, student treated as FL)'], ['rejected', 'rejected'], ['n.a.', 'n.a.'],
+              ].map(([v, l]) => <option value={v}>{l}</option>)}
             </select>
           </label>
           <label>Accommodation in force (now: {effectiveAccommodation(app, cfg) || '?'})

@@ -55,6 +55,26 @@ export function Assignment() {
     }
   };
 
+  // Shown above the list of changes (and again below a long list).
+  const applyButton = preview && preview.changes.length > 0 && (
+    <button
+      class="primary"
+      onClick={() =>
+        confirm(
+          `Apply ${preview.changes.length} change(s) to the assignment?` +
+            (preview.changes.some((c) => c.kind === 'lost') ? `\n\n${preview.changes.filter((c) => c.kind === 'lost').length} student(s) LOSE their place.` : ''),
+        ) &&
+        run(async () => {
+          const n = await repo.applyAssignment(preview.changes);
+          setPreview(null);
+          return n;
+        }, `Assignment applied (${preview.changes.length} change(s)).`)
+      }
+    >
+      Apply these {preview.changes.length} change(s)
+    </button>
+  );
+
   return (
     <div>
       <h1>Assign courses</h1>
@@ -152,6 +172,7 @@ export function Assignment() {
                   <span class={`badge ${k === 'lost' || k === 'dorm-full' ? 'warnb' : ''}`}>{KIND[k as AssignChange['kind']]}: {n}</span>
                 ))}
               </p>
+              {preview.changes.length > 0 && <p>{applyButton}</p>}
               {preview.changes.length > 0 && (
                 <table><tbody>
                   <tr><th>ID</th><th>Name</th><th>Change</th><th>From</th><th>To</th><th>Reason</th></tr>
@@ -167,26 +188,7 @@ export function Assignment() {
                   ))}
                 </tbody></table>
               )}
-              {preview.changes.length > 0 && (
-                <p>
-                  <button
-                    class="primary"
-                    onClick={() =>
-                      confirm(
-                        `Apply ${preview.changes.length} change(s) to the assignment?` +
-                          (preview.changes.some((c) => c.kind === 'lost') ? `\n\n${preview.changes.filter((c) => c.kind === 'lost').length} student(s) LOSE their place.` : ''),
-                      ) &&
-                      run(async () => {
-                        const n = await repo.applyAssignment(preview.changes);
-                        setPreview(null);
-                        return n;
-                      }, `Assignment applied (${preview.changes.length} change(s)).`)
-                    }
-                  >
-                    Apply these {preview.changes.length} change(s)
-                  </button>
-                </p>
-              )}
+              {preview.changes.length > 15 && <p>{applyButton}</p>}
             </>
           )}
         </div>

@@ -141,6 +141,19 @@ export function Schools() {
               <td class="nowrap">
                 <button onClick={() => run(() => repo.confirmSchool(g.name, 'Flemish'), `${g.name}: Flemish (${g.ids.length} student(s)).`)}>Flemish ✓</button>
                 <button onClick={() => run(() => repo.confirmSchool(g.name, 'not Flemish'), `${g.name}: not Flemish (${g.ids.length} student(s)).`)}>Not Flemish</button>
+                <button
+                  title="The school is not Flemish, but these students get FL priority and fee anyway. The school is NOT saved as Flemish."
+                  onClick={() => {
+                    const who = g.ids.length === 1 ? g.ids[0] : `all ${g.ids.length} students (${g.ids.join(', ')})`;
+                    const r = prompt(`"${g.name}" is not a Flemish school, but treat ${who} as FL anyway?
+The school is not saved as Flemish. For one student of several, use the student's page or Locking.
+
+Reason (required, logged):`);
+                    if (r && r.trim()) run(() => repo.flException(g.ids, r), `${g.name}: ${g.ids.length} student(s) treated as FL (exception).`);
+                  }}
+                >
+                  Not FL school, but FL student…
+                </button>
               </td>
             </tr>
           );

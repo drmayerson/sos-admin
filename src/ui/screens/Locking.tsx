@@ -109,6 +109,17 @@ export function Locking() {
                       <span class="muted">{field(a, cfg, 'school')}</span>
                       <button onClick={() => run(() => repo.updateApplication(id, { [APP_COLS.flStatus]: 'confirmed' }, 'Flemish school check'), `${id}: Flemish school confirmed.`)}>Flemish ✓</button>
                       <button onClick={() => run(() => repo.updateApplication(id, { [APP_COLS.flStatus]: 'rejected' }, 'Flemish school check'), `${id}: not a Flemish school (fee: other).`)}>Not Flemish</button>
+                      <button
+                        title="The school is not Flemish, but this student gets FL priority and fee anyway (the school is not saved as Flemish)"
+                        onClick={() => {
+                          const r = prompt(`${id}: the school is not Flemish, but treat this student as FL anyway.
+
+Reason (required, logged):`);
+                          if (r && r.trim()) run(() => repo.flException([id], r), `${id}: treated as FL (exception).`);
+                        }}
+                      >
+                        FL exception…
+                      </button>
                     </div>
                   )}
                 </td>

@@ -60,6 +60,17 @@ export function Admissions() {
           </div>
           {ex.rows.length > 0 && (
             <>
+              <p>
+                <button
+                  class="primary"
+                  onClick={async () => {
+                    await downloadXlsx(ex, `SOS-admissions-${today}.xlsx`);
+                    await run(() => repo.setPendingAdmission({ ids: ex.rows.map((r) => r.ID), deadline: ex.paymentDeadline, date: today }));
+                  }}
+                >
+                  Download mail-merge Excel ({ex.rows.length})
+                </button>
+              </p>
               <table><tbody>
                 <tr>{['ID', 'Student', 'Parent e-mail', 'CC parent', 'Session', 'Course', 'Acc.', 'Fee', 'Aid', 'Due'].map((h) => <th>{h}</th>)}</tr>
                 {ex.rows.map((r) => (
@@ -77,15 +88,6 @@ export function Admissions() {
                   </tr>
                 ))}
               </tbody></table>
-              <button
-                class="primary"
-                onClick={async () => {
-                  await downloadXlsx(ex, `SOS-admissions-${today}.xlsx`);
-                  await run(() => repo.setPendingAdmission({ ids: ex.rows.map((r) => r.ID), deadline: ex.paymentDeadline, date: today }));
-                }}
-              >
-                Download mail-merge Excel ({ex.rows.length})
-              </button>
             </>
           )}
         </div>

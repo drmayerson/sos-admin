@@ -750,6 +750,15 @@ export class Repo {
   }
 
   /**
+   * "Not a Flemish school, but treat this student as FL anyway" (Daniel, 18 Nov 2026): FL priority and fee for these
+   * students only; the school itself is not saved as Flemish. Reason required (audited).
+   */
+  async flException(ids: string[], reason: string): Promise<void> {
+    if (!reason.trim()) throw new Error('Give a reason for the exception.');
+    await this.bulkUpdate(ids.map((id) => ({ id, values: { [APP_COLS.flStatus]: 'exception' } })), `FL exception (school not Flemish): ${reason.trim()}`);
+  }
+
+  /**
    * Agree with Claude on every school it judged "Flemish" that has no verdict yet: confirm them all and decide
    * their claimed students in one batch. "not Flemish" (contested) and "unclear" stay for a human.
    */

@@ -196,6 +196,12 @@ Fixes made without needing a decision:
 - **OCR:** clear messages for iPhone HEIC photos and password-protected or damaged PDFs.
 - **Content-Security-Policy** in the built app: scripts only from the app and Google sign-in, network only to Google sign-in and Sheets.
 
+### Feedback 18 Nov 2026 (as built)
+- **FL exception:** "Not FL school, but FL student…" (FL schools screen, per school group; Locking and the student's Edit view, per student). Sets FL status `exception`: FL priority and fee for that student only; the school is **not** saved as Flemish (so it isn't applied to other students or next seasons). Reason required, audited.
+- **Flag decisions explained** on the Flags screen: *approve* = real issue, go ahead anyway; *overrule* = the flag is wrong; both close the flag and it is not raised again. *Resolved* = the issue was fixed; the automatic data checks run again and raise a new flag if the problem is still there. All three unblock locking.
+- **Find student** search box in the student view (name, ID, e-mail, parent, school; Enter opens the first match).
+- **Apply changes** button above the assignment preview list (and again below a long list); **Download mail-merge Excel** above the admission list.
+
 ## 9. Still to be done / decided
 
 *Parked items, collected here so nothing gets lost. Move an item into the relevant section once it is decided.*

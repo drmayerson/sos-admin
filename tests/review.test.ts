@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { lockBlockers } from '../src/core/assign';
 import { brusselsDate, brusselsEndOfDayUTC } from '../src/core/dates';
 import { deadlineFlags } from '../src/core/deadlines';
+import { countsAsFlemish } from '../src/core/fees';
 import { analyzeProof, ibanCandidates, validIban } from '../src/core/proof';
 import { Repo } from '../src/core/repo';
 import { csvCell } from '../src/core/rosters';
@@ -119,6 +120,20 @@ describe('repo: paid by hand, reinstating, settings guards', () => {
     expect(a[APP_COLS.status]).toBe('active');
     expect(a[APP_COLS.assignedCourse]).toBe(course);
     expect(text).toContain(course);
+  });
+
+  it('FL exception: the student counts as FL, the school is not saved as Flemish', async () => {
+    const repo = await imported();
+    const claimed = (await repo.snapshot()).apps.find((a) => a[APP_COLS.flStatus] === 'claimed')!;
+    const id = claimed[APP_COLS.id];
+    await expect(repo.flException([id], ' ')).rejects.toThrow(/reason/);
+    const schoolsBefore = await repo.store.readAll('Schools');
+    await repo.flException([id], 'moved from Flanders in May');
+    const a = await app(repo, id);
+    expect(a[APP_COLS.flStatus]).toBe('exception');
+    expect(countsAsFlemish(a)).toBe(true);
+    expect(lockBlockers(a, []).join()).not.toMatch(/Flemish/);
+    expect(await repo.store.readAll('Schools')).toEqual(schoolsBefore);
   });
 
   it('refuses a column-mapping change once applications exist', async () => {

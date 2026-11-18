@@ -154,7 +154,8 @@ export const APP_COLS = {
 } as const;
 
 export type AppStatus = 'active' | 'merged' | 'withdrawn';
-export type FLStatus = 'claimed' | 'confirmed' | 'rejected' | 'n.a.';
+/** 'exception': the school is not Flemish, but this one student is treated as FL anyway (school not saved as FL). */
+export type FLStatus = 'claimed' | 'confirmed' | 'exception' | 'rejected' | 'n.a.';
 
 export const FLAG_TYPES = [
   'NO_COURSE_CHOSEN', 'UNKNOWN_COURSE', 'UNKNOWN_SESSION', 'BAD_BIRTH_DATE', 'YOUNG', 'TOO_OLD', 'SHORT_MOTIVATION',

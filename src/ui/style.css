@@ -142,3 +142,8 @@ mark.hint { background: #ffe58f; padding: 0 1px; }
 .review-list { max-height: 420px; overflow: auto; border: 1px solid var(--line); background: #fff; padding: 6px 10px; }
 .review-item { border-bottom: 1px solid var(--line); padding: 6px 0; white-space: pre-wrap; font-size: 0.85rem; }
 input.invalid { border-color: #b42318; background: #fdecec; }
+.search-pop { position: relative; }
+.search-pop input { width: 17em; }
+.search-results { position: absolute; z-index: 20; top: 100%; left: 0; min-width: 22em; background: #fff; border: 1px solid var(--line); box-shadow: 0 4px 12px rgba(0,0,0,.12); padding: 4px; }
+.search-results button.link { display: block; width: 100%; text-align: left; padding: 4px 6px; }
+.search-results button.link:hover { background: #eef3f9; }

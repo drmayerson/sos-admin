@@ -20,9 +20,27 @@ export function Flags() {
       <h1>Flags</h1>
       <p>
         Flags never reject anyone; they ask for a human decision. Log what you do in the <b>comments</b> (e.g. "e-mailed
-        the student") and decide when ready: <b>approve</b> = proceed anyway, <b>overrule</b> = the flag is wrong,
-        <b> resolve</b> = the issue was fixed (e.g. data corrected). Decided flags stay as history.
+        the student") and decide when ready. Decided flags stay as history and can be reopened.
       </p>
+      <table class="small"><tbody>
+        <tr><th>Decision</th><th>Means</th><th>What happens next</th></tr>
+        <tr>
+          <td><b>Approve</b></td><td>The issue is real, but the student goes ahead anyway (e.g. a short motivation you accept).</td>
+          <td rowspan={2}>
+            The flag is closed and no longer blocks locking. The data stays as it is, so the same check would still fire —
+            but it is <b>not raised again</b> for this student.
+          </td>
+        </tr>
+        <tr><td><b>Overrule</b></td><td>The flag is wrong: there is no issue (e.g. the "unknown course" is a typo the app misread).</td></tr>
+        <tr>
+          <td><b>Resolved</b></td><td>The issue was fixed: the data was corrected (on the student's page or in the Sheet) or the student sent what was missing.</td>
+          <td>
+            The flag is closed and no longer blocks locking. The automatic data checks (birth date, course, motivation length…)
+            run again on the next edit, import or Check and repair: if the problem is <b>still there, a new flag is raised</b>. (Flags that disappear because the data was corrected
+            are closed as resolved automatically.)
+          </td>
+        </tr>
+      </tbody></table>
       <p>{counts.map(([t, n]) => <button class="badge" onClick={() => setType(t)}>{t} {n}</button>)}</p>
       <div class="row">
         <select value={type} onChange={(e) => setType((e.target as HTMLSelectElement).value)}>
@@ -71,9 +89,9 @@ function FlagRow({ f }: { f: Row }) {
             {open && <input placeholder="Decision note" value={note} onInput={(e) => setNote((e.target as HTMLInputElement).value)} />}
             {open ? (
               <>
-                <button onClick={() => set('approved')}>Approve</button>
-                <button onClick={() => set('overruled')}>Overrule</button>
-                <button onClick={() => set('resolved')}>Resolved</button>
+                <button title="Real issue, but go ahead anyway. Not raised again." onClick={() => set('approved')}>Approve</button>
+                <button title="The flag is wrong: there is no issue. Not raised again." onClick={() => set('overruled')}>Overrule</button>
+                <button title="The issue was fixed (data corrected). Raised again if the check still fails." onClick={() => set('resolved')}>Resolved</button>
               </>
             ) : (
               <button onClick={() => set('open')}>Reopen</button>

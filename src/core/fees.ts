@@ -4,7 +4,7 @@ import { APP_COLS, type Accommodation, type Row, type SeasonConfig } from './typ
 /** FL priority and FL fee: "claimed" counts until rejected (Daniel, 7 Nov 2026). */
 export function countsAsFlemish(app: Row): boolean {
   const s = app[APP_COLS.flStatus];
-  return s === 'claimed' || s === 'confirmed';
+  return s === 'claimed' || s === 'confirmed' || s === 'exception';
 }
 
 /** Accommodation after the user's decisions; falls back to the form answer. */
