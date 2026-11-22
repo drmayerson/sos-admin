@@ -177,3 +177,10 @@ input.invalid { border-color: #b42318; background: #fdecec; }
 .wf-key.wf-todo { background: var(--warn); border-color: #c98a00; }
 .wf-key.wf-wait { background: #f1f2f4; border-color: #b9bec7; }
 .wf-key.wf-zero { opacity: 0.55; }
+/* Menu: scrolls on its own; brand + Home/Dashboard/Applications stay frozen at the top; history/new season at the bottom. */
+@media (min-width: 801px) {
+  nav { position: sticky; top: 0; height: 100vh; overflow-y: auto; padding-top: 0; }
+  nav .nav-top { position: sticky; top: 0; z-index: 2; background: #1f2a3a; padding-top: 12px; padding-bottom: 6px; border-bottom: 1px solid #34455e; display: flex; flex-direction: column; }
+}
+nav .nav-bottom { margin-top: auto; padding-top: 28px; display: flex; flex-direction: column; }
+nav .nav-bottom + .store { margin-top: 0; }

@@ -12,7 +12,7 @@ export function Waitlist() {
   const pinned = snap.apps.filter((a) => isActive(a) && a[APP_COLS.pinnedCourse]);
   return (
     <div>
-      <h1>Waitlist</h1>
+      <h1>Waitlist courses</h1>
       <p>
         Active students without a course, in priority order (FL first, then posting time). Assigning a course here is a
         <b> manual assignment</b>: re-runs never move the student (it may exceed the course limit, but you'll see a warning

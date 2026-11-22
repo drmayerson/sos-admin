@@ -12,7 +12,7 @@ export function DormFull() {
   const list = snap.apps.filter((a) => isActive(a) && a[APP_COLS.dormWaiting] === 'TRUE').sort(priorityCompare);
   return (
     <div>
-      <h1>Dorm full</h1>
+      <h1>Waitlist dorms</h1>
       <p>
         FULL students who have a course place but no dorm place, in priority order, with what they answered on the form. Decide
         per student; the fee follows the accommodation. Students left here keep waiting (a later run gives them a dorm place

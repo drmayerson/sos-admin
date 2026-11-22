@@ -24,9 +24,15 @@ import { Setup } from './screens/Setup';
 import { Waitlist } from './screens/Waitlist';
 import { Young } from './screens/Young';
 
-const NAV: [string, string][] = [
+/** Always visible at the top of the menu (frozen while the rest of the menu scrolls). */
+const NAV_TOP: [string, string][] = [
   ['', 'Home'],
   ['dashboard', 'Dashboard'],
+  ['apps', 'Applications'],
+];
+/** '-' starts a section with that title. */
+const NAV: [string, string][] = [
+  ['-', 'Season setup'],
   ['setup', 'Season setup'],
   ['prereq', 'LLM helper – prerequisites'],
   ['-', 'Applications'],
@@ -36,11 +42,10 @@ const NAV: [string, string][] = [
   ['flags', 'Flags'],
   ['schools', 'LLM helper – FL schools'],
   ['motivation', 'LLM helper – motivation check'],
-  ['apps', 'Applications'],
   ['-', 'Assignment'],
   ['assign', 'Assign courses'],
-  ['waitlist', 'Waitlist'],
-  ['dorms', 'Dorm full'],
+  ['waitlist', 'Waitlist courses'],
+  ['dorms', 'Waitlist dorms'],
   ['lock', 'Locking'],
   ['aid', 'Financial aid'],
   ['admit', 'Admissions'],
@@ -52,7 +57,10 @@ const NAV: [string, string][] = [
   ['refunds', 'Unenrolled after paid'],
   ['-', 'Lists'],
   ['exports', 'Rosters & lists'],
-  ['-', ''],
+];
+/** Rarely used: at the bottom of the menu, apart from the daily work. */
+const NAV_BOTTOM: [string, string][] = [
+  ['-', 'History and new season'],
   ['audit', 'Audit log'],
   ['newseason', 'New season'],
 ];
@@ -195,6 +203,16 @@ function Main({ repo, sheetId, onDisconnect }: { repo: Repo; sheetId: string; on
     audit: () => <Audit />,
   };
   const body = (screens[page] ?? (() => <Home />))();
+  const navLinks = (items: [string, string][]) =>
+    items.map(([path, label]) =>
+      path === '-' ? (
+        <div class="nav-section">{label}</div>
+      ) : (
+        <a href={`#/${path}`} class={(page ?? '') === path ? 'active' : ''}>
+          {label}
+        </a>
+      ),
+    );
 
   return (
     <AppCtx.Provider value={ctx}>
@@ -215,17 +233,13 @@ function Main({ repo, sheetId, onDisconnect }: { repo: Repo; sheetId: string; on
       )}
       <div class="layout">
         <nav>
-          <div class="brand">SOS admin</div>
-          <div class="season">{snap.cfg ? `Season ${snap.cfg.season}` : 'No season set up'}</div>
-          {NAV.map(([path, label]) =>
-            path === '-' ? (
-              <div class="nav-section">{label}</div>
-            ) : (
-              <a href={`#/${path}`} class={(page ?? '') === path ? 'active' : ''}>
-                {label}
-              </a>
-            ),
-          )}
+          <div class="nav-top">
+            <div class="brand">SOS admin</div>
+            <div class="season">{snap.cfg ? `Season ${snap.cfg.season}` : 'No season set up'}</div>
+            {navLinks(NAV_TOP)}
+          </div>
+          {navLinks(NAV)}
+          <div class="nav-bottom">{navLinks(NAV_BOTTOM)}</div>
           <div class="store">
             {sheetId ? (
               <>
