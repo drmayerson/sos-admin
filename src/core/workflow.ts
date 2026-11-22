@@ -44,7 +44,7 @@ export interface Workflow {
   gates: Gate[];
   /** Outside the main flow: withdrawn students, refunds to do. */
   side: Item[];
-  /** Everything to do, in workflow order; the first is "next". */
+  /** Every place where you can act now (needs you, or ready to move on), in workflow order. */
   todo: Item[];
 }
 
@@ -76,12 +76,16 @@ export function workflow(apps: Row[], flags: Row[], payments: Row[] | null, cfg:
 
   // Applied → assigned.
   const applied = by.get('applied')!;
+  // Near-duplicates come first: until a pair is merged or kept separate, only the earliest application gets a seat.
+  const nearDup = new Set(openFlags.filter((f) => f[FLAG_COLS.type] === 'NEAR_DUPLICATE').map((f) => f[FLAG_COLS.appId]));
+  const dups = active.filter((a) => nearDup.has(a[APP_COLS.id])).length;
   const waitlisted = applied.filter((a) => (a[APP_COLS.assignNote] ?? '').startsWith('waitlist')).length;
   const notRun = applied.length - waitlisted;
   const gate1: Gate = {
     from: 'applied',
     ready: null,
     branches: [
+      item('neardup', 'near-duplicate to review', dups, 'todo', '#/merge', `Review ${dups} near-duplicate application(s): merge or keep separate`),
       item('unassigned', 'not assigned yet', notRun, 'todo', '#/assign', `Run the course assignment (${notRun} new student(s))`),
       item('waitlist', 'waitlist', waitlisted, 'wait', '#/waitlist', `${waitlisted} student(s) on the waitlist: raise a limit or assign by hand`),
     ],
@@ -92,7 +96,7 @@ export function workflow(apps: Row[], flags: Row[], payments: Row[] | null, cfg:
   const assigned = by.get('assigned')!;
   const notLocked = [...applied, ...assigned];
   const youngOpen = (id: string) => openFlags.some((f) => f[FLAG_COLS.appId] === id && f[FLAG_COLS.type] === 'YOUNG');
-  const otherOpen = (id: string) => openFlags.some((f) => f[FLAG_COLS.appId] === id && f[FLAG_COLS.type] !== 'YOUNG');
+  const otherOpen = (id: string) => openFlags.some((f) => f[FLAG_COLS.appId] === id && f[FLAG_COLS.type] !== 'YOUNG' && f[FLAG_COLS.type] !== 'NEAR_DUPLICATE');
   let ready = 0, young = 0, other = 0, fl = 0, dorm = 0;
   for (const a of assigned) {
     const why = lockBlockers(a, flags);
@@ -157,9 +161,9 @@ export function workflow(apps: Row[], flags: Row[], payments: Row[] | null, cfg:
   ];
 
   const gates = [gate1, gate2, gate3, gate4];
-  // What to do, in the order it's best done: flags first (young-student decisions and near-duplicates change the
-  // assignment), then assign, confirm FL schools, lock, admit, follow up payments.
-  const ORDER_TODO = ['young', 'flags', 'unassigned', 'fl', 'lock', 'sent', 'admit', 'unmatched', 'proofs', 'overdue', 'refunds'];
+  // Workflow order: near-duplicates and flags first (they change the assignment), then assign, confirm FL schools,
+  // lock, admit, follow up payments. Several are usually open at once: the diagram marks them all.
+  const ORDER_TODO = ['neardup', 'young', 'flags', 'unassigned', 'fl', 'lock', 'sent', 'admit', 'unmatched', 'proofs', 'overdue', 'refunds'];
   const all = [...gates.flatMap((g) => [...g.branches, ...(g.ready ? [g.ready] : [])]), ...side];
   const todo = ORDER_TODO.map((k) => all.find((x) => x.key === k)!).filter((x) => x && x.n > 0);
   return { stages, gates, side, todo };

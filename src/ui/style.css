@@ -159,10 +159,13 @@ input.invalid { border-color: #b42318; background: #fdecec; }
 .wf-chip rect { stroke-width: 1; }
 .wf-chip text { fill: var(--text); }
 .wf-chip:hover rect { filter: brightness(0.95); }
-.wf-chip.wf-ready rect { fill: var(--ok); stroke: #4f9a5e; }
-.wf-chip.wf-todo rect { fill: var(--warn); stroke: #c98a00; }
+.wf-chip.wf-ready rect { fill: var(--ok); stroke: #9ccaa6; }
+.wf-chip.wf-todo rect { fill: var(--warn); stroke: #e0c27a; }
 .wf-chip.wf-wait rect { fill: #f1f2f4; stroke: #b9bec7; }
-.wf-chip.wf-next rect { stroke: var(--accent); stroke-width: 2.5; }
+.wf-chip.wf-act rect { stroke-width: 2.5; }
+.wf-chip.wf-act text { font-weight: 600; }
+.wf-chip.wf-todo.wf-act rect { fill: #ffe9b0; stroke: #b07400; }
+.wf-chip.wf-ready.wf-act rect { fill: #d3efd9; stroke: #2f7d40; }
 .wf-chip.wf-zero rect { fill: #fafafa; stroke: #e3e5e9; }
 .wf-chip.wf-zero text { fill: #a0a6b0; }
 .wf-branch path { stroke: #e0b44c; }

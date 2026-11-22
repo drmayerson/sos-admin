@@ -35,7 +35,8 @@ describe('workflow diagram counts', () => {
     const lockGate = w.gates[1];
     expect(lockGate.branches.find((b) => b.key === 'young')!.n).toBeGreaterThan(0);
     expect(lockGate.branches.find((b) => b.key === 'fl')!.n).toBeGreaterThan(0);
-    expect(w.todo.map((t) => t.key).slice(0, 3)).toEqual(['young', 'flags', 'unassigned']);
+    expect(w.todo.map((t) => t.key).slice(0, 4)).toEqual(['neardup', 'young', 'flags', 'unassigned']);
+    expect(w.gates[0].branches.find((b) => b.key === 'neardup')!.n).toBeGreaterThan(0);
   });
 
   it('after assignment: stage counts add up and the lock gate splits ready vs blocked', async () => {

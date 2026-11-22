@@ -20,10 +20,13 @@ const LINE_Y = BY + BH / 2;
 
 const xOf = (i: number) => 10 + i * (BW + GAP);
 
-function Chip({ it, x, y, next }: { it: Item; x: number; y: number; next: boolean }) {
+/** Something you can act on now: needs you, or students ready to move on. Drawn bold with a thick border. */
+const actionable = (it: Item) => it.n > 0 && it.kind !== 'wait';
+
+function Chip({ it, x, y }: { it: Item; x: number; y: number }) {
   const zero = it.n === 0;
   return (
-    <a href={it.href} class={`wf-chip wf-${it.kind}${zero ? ' wf-zero' : ''}${next ? ' wf-next' : ''}`}>
+    <a href={it.href} class={`wf-chip wf-${it.kind}${zero ? ' wf-zero' : ''}${actionable(it) ? ' wf-act' : ''}`}>
       <title>{it.action}</title>
       <rect x={x} y={y} width={CW} height={RH} rx={5} />
       <text x={x + CW / 2} y={y + RH / 2} text-anchor="middle" dominant-baseline="central">
@@ -43,17 +46,16 @@ export function WorkflowDiagram() {
   const wf = workflow(snap.apps, snap.flags, payments, snap.cfg, brusselsDate());
   const total = Math.max(1, wf.stages[0].reached);
   const thick = (n: number, max: number) => (n === 0 ? 1 : 2 + max * Math.sqrt(n / total));
-  const next = wf.todo[0];
   const maxRows = Math.max(...wf.gates.map((g) => g.branches.length));
   const H = ROW0 + maxRows * ROWS + 6;
 
   return (
     <div class="wf">
       <div class="wf-next-line">
-        {next ? (
+        {wf.todo.length ? (
           <>
-            <b>Next:</b> <a href={next.href}>{next.action} →</a>
-            {wf.todo.length > 1 && <span class="muted small"> (then: {wf.todo.slice(1, 4).map((t) => t.action.toLowerCase()).join('; ')}{wf.todo.length > 4 ? '; …' : ''})</span>}
+            <b>{wf.todo.length} place(s) where you can act now</b>{' '}
+            <span class="muted small">(bold, with a thick border; hover for what to do, click to go there)</span>
           </>
         ) : (
           <span class="muted">Nothing to do right now.</span>
@@ -104,8 +106,8 @@ export function WorkflowDiagram() {
           const cx = xOf(i) + BW + GAP / 2;
           return (
             <>
-              {g.ready && <Chip it={g.ready} x={cx - CW / 2} y={10} next={next?.key === g.ready.key} />}
-              {g.branches.map((b, j) => <Chip it={b} x={cx - CW / 2} y={ROW0 + j * ROWS} next={next?.key === b.key} />)}
+              {g.ready && <Chip it={g.ready} x={cx - CW / 2} y={10} />}
+              {g.branches.map((b, j) => <Chip it={b} x={cx - CW / 2} y={ROW0 + j * ROWS} />)}
             </>
           );
         })}

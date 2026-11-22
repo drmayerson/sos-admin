@@ -112,6 +112,11 @@ function Group({ earliestId, flags, cfg }: { earliestId: string; flags: Row[]; c
           />
           <button
             onClick={() =>
+              confirm(
+                `Keep ${l.app[APP_COLS.id]} as a separate application (a different student, e.g. a sibling sharing an e-mail address)?\n\n` +
+                  `It is treated as a different person from ${earliestId} from now on: it competes for its own seat, gets its own fee and payment, ` +
+                  `and won't be flagged as a near-duplicate of ${earliestId} again.`,
+              ) &&
               run(
                 () => repo.keepSeparate(l.flag[FLAG_COLS.flagId], notes[l.flag[FLAG_COLS.flagId]] || 'not a duplicate'),
                 `${l.app[APP_COLS.id]} kept as a separate application.`,
