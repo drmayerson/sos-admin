@@ -202,6 +202,13 @@ Fixes made without needing a decision:
 - **Find student** search box in the student view (name, ID, e-mail, parent, school; Enter opens the first match).
 - **Apply changes** button above the assignment preview list (and again below a long list); **Download mail-merge Excel** above the admission list.
 
+### Workflow diagram (Daniel, 22 Nov 2026; as built)
+On Home, above the cards: the admission flow as a diagram (Daniel chose the "flow with branches" layout).
+- **Stage boxes** Applied → Assigned → Locked → Admitted → Paid, each with the number of students currently in it. Line thickness between stages = students who got at least that far.
+- **Between two stages:** a green chip for students ready to move on by your action (ready to lock, admission e-mail to send, proof to check), and side branches for what holds students back, which rejoin the line at the next stage: not assigned yet / waitlist; young-student flag, other flags, FL school to confirm, no dorm place; e-mails sent but not confirmed; payments to match, deadline passed, awaiting payment. Young/other flags and FL school count every student not yet locked (they can be handled before assignment). A student can be in several branches.
+- **Colours:** amber = needs you, green = ready (your action), grey = waiting on others; zero counts are faded. Withdrawn students and refunds to pay are shown under the diagram.
+- **Next:** a line above the diagram names the most urgent thing to do (order: young flags, other flags, run assignment, FL schools, lock, confirm/send admission e-mails, match payments, check proofs, overdue payments, refunds). Every box, chip and branch links to the screen that handles it. Logic in `src/core/workflow.ts` (tested), drawing in `src/ui/WorkflowDiagram.tsx`.
+
 ## 9. Still to be done / decided
 
 *Parked items, collected here so nothing gets lost. Move an item into the relevant section once it is decided.*

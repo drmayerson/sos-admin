@@ -2,6 +2,7 @@ import { brusselsDate } from '../../core/dates';
 import { awaitingPayment, isOverdue } from '../../core/deadlines';
 import { APP_COLS, FLAG_COLS } from '../../core/types';
 import { useApp } from '../ctx';
+import { WorkflowDiagram } from '../WorkflowDiagram';
 
 export function Home() {
   const { snap } = useApp();
@@ -19,6 +20,7 @@ export function Home() {
           No season is set up yet. Start with <a href="#/setup">Season setup</a>.
         </p>
       )}
+      <WorkflowDiagram />
       <div class="cards">
         <Card n={active.length} label="active applications" href="#/apps" />
         {snap.cfg?.sessions.map((s) => <Card n={bySession(s.key)} label={s.label} href="#/apps" />)}
