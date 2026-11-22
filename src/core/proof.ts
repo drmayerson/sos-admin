@@ -131,7 +131,28 @@ export function analyzeProof(text: string, exp: ProofExpectation): ProofAnalysis
   return { verdict, amountFound, referenceFound, ibanFound, amountsSeen, payerIbans, candidates, detail };
 }
 
-export type Pairing = { kind: 'paired'; file: number } | { kind: 'ambiguous'; files: number[] } | { kind: 'missing' };
+/**
+ * Which dropped proof files to keep: a file is a duplicate copy when it has the same content (hash) AND the same name
+ * apart from the date-time the Power Automate flow puts in ("<e-mail>__yyyyMMdd-HHmmss__<name>"), i.e. the same payer
+ * and the same original file — dropped twice, or a form submitted twice. Identical content under another payer's name
+ * is kept on purpose: the proof check must see it to flag "the same proof file was used for …".
+ * `seen` holds the keys of files kept earlier and is updated.
+ */
+export function uniqueProofFiles(files: { name: string; hash: string }[], seen: Set<string>): { keep: number[]; skipped: number } {
+  const keep: number[] = [];
+  let skipped = 0;
+  files.forEach((f, i) => {
+    const key = `${f.hash}|${f.name.trim().toLowerCase().replace(/__\d{8}-\d{6}__/, '__')}`;
+    if (seen.has(key)) skipped++;
+    else {
+      seen.add(key);
+      keep.push(i);
+    }
+  });
+  return { keep, skipped };
+}
+
+export type Pairing ={ kind: 'paired'; file: number } | { kind: 'ambiguous'; files: number[] } | { kind: 'missing' };
 
 /**
  * Pair dropped proof files with payment rows by file name (case-insensitive). A saved file may carry a prefix:

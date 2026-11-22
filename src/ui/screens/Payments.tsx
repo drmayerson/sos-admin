@@ -7,7 +7,7 @@ import { awaitingPayment, effectiveDeadline, isOverdue, REMINDER_COLUMNS, remind
 import { parseAmount } from '../../core/fees';
 import { field } from '../../core/flags';
 import { idList, NAME_ONLY, type PaymentPlan } from '../../core/payments';
-import { analyzeProof, pairProofFiles, type Pairing } from '../../core/proof';
+import { analyzeProof, pairProofFiles, uniqueProofFiles, type Pairing } from '../../core/proof';
 import { fold } from '../../core/text';
 import { APP_COLS, PAY_COLS, type Row, type SeasonConfig } from '../../core/types';
 import { DEMO_PAYMENTS, makeDemoProofs } from '../../store/demo';
@@ -230,6 +230,8 @@ async function fileHash(f: File): Promise<string> {
 
 /** Proof files dropped in this session: kept in memory only (never stored, never uploaded). */
 let proofFiles: File[] = [];
+/** Content + name keys of the files in `proofFiles`, to ignore duplicate copies (see uniqueProofFiles). */
+let proofKeys = new Set<string>();
 
 export function Proofs() {
   const { snap, repo, run } = useApp();
@@ -237,6 +239,7 @@ export function Proofs() {
   const [files, setFiles] = useState<File[]>(proofFiles);
   const [choice, setChoice] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState('');
+  const [dupNote, setDupNote] = useState('');
   const [filter, setFilter] = useState<'todo' | 'all'>('todo');
   useEffect(() => {
     repo.store.readAll('Payments').then(setPays);
@@ -246,10 +249,14 @@ export function Proofs() {
   if (!snap.cfg || !pays) return <p>Loading…</p>;
   const cfg = snap.cfg;
 
-  const addFiles = (list: FileList | File[] | null) => {
+  const addFiles = async (list: FileList | File[] | null) => {
     if (!list) return;
-    proofFiles = [...proofFiles, ...Array.from(list)];
+    const incoming = Array.from(list);
+    const hashes = await Promise.all(incoming.map(fileHash));
+    const { keep, skipped } = uniqueProofFiles(incoming.map((f, i) => ({ name: f.name, hash: hashes[i] })), proofKeys);
+    proofFiles = [...proofFiles, ...keep.map((i) => incoming[i])];
     setFiles(proofFiles);
+    setDupNote(skipped ? `${skipped} duplicate cop${skipped === 1 ? 'y' : 'ies'} ignored (same file from the same payer, already loaded).` : '');
   };
   const fileFor = (id: string): File | null => {
     const pr = pairing.get(id);
@@ -306,7 +313,8 @@ export function Proofs() {
       >
         Drop files here, or <input type="file" multiple accept="image/*,.pdf" onChange={(e) => addFiles((e.target as HTMLInputElement).files)} />
         {' '}or a folder: <input type="file" {...({ webkitdirectory: '' } as object)} onChange={(e) => addFiles((e.target as HTMLInputElement).files)} />
-        <div class="small muted">{files.length} file(s) loaded{files.length > 0 && <> · <button class="link" onClick={() => { proofFiles = []; setFiles([]); }}>forget them</button></>}</div>
+        <div class="small muted">{files.length} file(s) loaded{files.length > 0 && <> · <button class="link" onClick={() => { proofFiles = []; proofKeys = new Set(); setFiles([]); setDupNote(''); }}>forget them</button></>}</div>
+        {dupNote && <div class="small">{dupNote}</div>}
         {repo.store.isDemo && (
           <div class="small">
             Demo: <button class="link" onClick={async () => addFiles(await makeDemoProofs(pays, snap.apps, cfg))}>generate synthetic proof images</button>

@@ -209,6 +209,7 @@ On Home, above the cards: the admission flow as a diagram (Daniel chose the "flo
 - **Colours:** amber = needs you, green = ready (your action), grey = waiting on others; zero counts are faded. Withdrawn students and refunds to pay are shown under the diagram.
 - **Where to act:** no single "Next" step (Daniel, 22 Nov: young flags take a while while other students move on). Instead every place where you can act now (needs you, or ready to move on, with a count > 0) is drawn bold with a thick border, and the header says how many there are. Hover shows what to do; every box, chip and branch links to the screen that handles it. Logic in `src/core/workflow.ts` (tested), drawing in `src/ui/WorkflowDiagram.tsx`.
 
+- **Proof files dropped twice** (Daniel, 22 Nov): a dropped file is ignored when a file with the same content and the same name (apart from the flow's date-time) is already loaded — the folder dropped again, or a form submitted twice. The same content under another payer's name is kept, so the "same proof file used for two payments" check still fires. Re-imported payment rows and already checked/approved proofs were already safe.
 - **Near-duplicates:** "Keep separate" now asks for confirmation too (it makes the application a different person: own seat, own fee, not flagged against that application again).
 
 ## 9. Still to be done / decided
@@ -234,7 +235,7 @@ On Home, above the cards: the admission flow as a diagram (Daniel chose the "flo
 - **Google testing mode:** sign-in consent for an app in testing mode expires after ~7 days; then the user simply signs in again.
 - **Data protection:** DPO review before going live with real data, and the retention period for archived seasons (§2).
 - **Google account** that owns the master Sheet long-term: Daniel's own or a KU Leuven-linked account (§2).
-- **Proof files from Outlook** into one folder (Power Automate flow, `REMINDERS.md` item 3), each saved as `<payer e-mail>__<original name>` (the e-mail as given in the form, from the notification e-mail's body). A date/time prefix alone makes names unique but doesn't tie a file to its payment row.
+- **Proof files from Outlook** into one folder: Power Automate flow built and tested by Daniel on 22 Nov 2026 (`docs/POWER_AUTOMATE.md`). Files are saved as `<payer e-mail>__<received yyyyMMdd-HHmmss>__<original name>`; the app pairs them by the e-mail and the original name. Still to do: run it from a KU Leuven mailbox/OneDrive for the real season (the test notification went to a personal mailbox), and check the payment form's e-mail label change (the test notification still showed the old label).
 - **Real export details still unverified:** unticked checkbox value (empty vs `FALSE`); whether the fraction of a second in Posting Date/Time is always 6 digits (§8). Blank rows, BOM and unpadded time parts are handled.
 - **New-season form changes** (payment form e-mail label + session radio button, proof-of-payment folder): see `REMINDERS.md`.
 - **Not built:** the direct-API variant of the LLM steps; LLM help for payment leftovers (the fuzzy suggestions seem enough — revisit with real data).

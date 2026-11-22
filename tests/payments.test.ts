@@ -202,3 +202,28 @@ describe('proof files named with the payer e-mail', () => {
     expect(m.get('P-3')!.kind).toBe('ambiguous'); // no file with carl's e-mail: falls back to the shared name
   });
 });
+
+describe('dropping proof files twice', () => {
+  it('ignores copies of the same file from the same payer, keeps the same file under another payer', async () => {
+    const { uniqueProofFiles, pairProofFiles } = await import('../src/core/proof');
+    const seen = new Set<string>();
+    const first = uniqueProofFiles([
+      { name: 'ann@example.com__20270301-101500__payment.pdf', hash: 'h1' },
+      { name: 'ann@example.com__20270301-103000__payment.pdf', hash: 'h1' }, // form submitted twice
+      { name: 'bob@example.com__20270302-090000__payment.pdf', hash: 'h1' }, // same screenshot, other payer: keep
+      { name: 'bob@example.com__20270302-090000__receipt.png', hash: 'h2' },
+    ], seen);
+    expect(first).toEqual({ keep: [0, 2, 3], skipped: 1 });
+    // The whole folder dropped again: nothing new.
+    const again = uniqueProofFiles([
+      { name: 'ann@example.com__20270301-101500__payment.pdf', hash: 'h1' },
+      { name: 'bob@example.com__20270302-090000__receipt.png', hash: 'h2' },
+    ], seen);
+    expect(again).toEqual({ keep: [], skipped: 2 });
+    // After de-duplication Ann's payment pairs automatically again.
+    const names = ['ann@example.com__20270301-101500__payment.pdf', 'bob@example.com__20270302-090000__payment.pdf'];
+    const p = pairProofFiles([{ id: 'P1', proofFile: 'payment.pdf', email: 'ann@example.com' }, { id: 'P2', proofFile: 'payment.pdf', email: 'bob@example.com' }], names);
+    expect(p.get('P1')).toEqual({ kind: 'paired', file: 0 });
+    expect(p.get('P2')).toEqual({ kind: 'paired', file: 1 });
+  });
+});
